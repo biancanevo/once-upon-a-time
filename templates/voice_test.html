@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Test - AI Storyteller</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 Voice Recognition Test</h1>
+            <p class="subtitle">Test voice commands for the storyteller</p>
+        </header>
+
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/manage">Manage Cards</a>
+            <a href="/voice_test" class="active">Voice Test</a>
+        </nav>
+
+        <!-- Language Selection -->
+        <section class="language-section">
+            <h2>Language</h2>
+            <div class="language-select">
+                <select id="language-select">
+                    <option value="es-ES">Spanish (Spain)</option>
+                    <option value="es-MX">Spanish (Mexico)</option>
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                </select>
+                <button id="set-language-btn" class="btn btn-secondary">Set Language</button>
+            </div>
+        </section>
+
+        <!-- Voice Test -->
+        <section class="voice-test-section">
+            <h2>Voice Recognition Test</h2>
+            <p class="instructions">
+                Click the button below and speak a command like:<br>
+                <em>"Tell me a story about a cat and a dog"</em> or<br>
+                <em>"Cuéntame una historia sobre un león y un elefante"</em>
+            </p>
+
+            <div class="voice-controls">
+                <button id="listen-btn" class="btn btn-primary btn-large">
+                    <span class="icon">🎤</span>
+                    Listen (5 seconds)
+                </button>
+            </div>
+
+            <div id="voice-status" class="voice-status" style="display: none;">
+                <div class="spinner-small"></div>
+                <span>Listening...</span>
+            </div>
+        </section>
+
+        <!-- Results -->
+        <section class="results-section">
+            <h2>Results</h2>
+
+            <div class="result-box">
+                <h3>Recognized Text</h3>
+                <div id="recognized-text" class="result-content">
+                    <p class="placeholder">No text recognized yet</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h3>Detected Animals</h3>
+                <div id="detected-animals" class="result-content animal-chips">
+                    <p class="placeholder">No animals detected yet</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h3>Status</h3>
+                <div id="recognition-status" class="result-content">
+                    <p class="placeholder">-</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Example Commands -->
+        <section class="examples-section">
+            <h2>Example Commands</h2>
+            <div class="examples-list">
+                <div class="example">
+                    <strong>Spanish:</strong>
+                    <ul>
+                        <li>"Cuéntame una historia sobre un gato"</li>
+                        <li>"Una historia de un león y una jirafa"</li>
+                        <li>"Quiero escuchar sobre un elefante y un mono"</li>
+                    </ul>
+                </div>
+                <div class="example">
+                    <strong>English:</strong>
+                    <ul>
+                        <li>"Tell me a story about a cat"</li>
+                        <li>"A story about a lion and a giraffe"</li>
+                        <li>"I want to hear about an elephant and a monkey"</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Known Animals -->
+        <section class="animals-list-section">
+            <h2>Recognized Animals</h2>
+            <p class="small">The following animal names are recognized by the system:</p>
+            <div class="known-animals">
+                <span class="animal-tag">cat / gato</span>
+                <span class="animal-tag">dog / perro</span>
+                <span class="animal-tag">lion / león</span>
+                <span class="animal-tag">tiger / tigre</span>
+                <span class="animal-tag">elephant / elefante</span>
+                <span class="animal-tag">giraffe / jirafa</span>
+                <span class="animal-tag">monkey / mono</span>
+                <span class="animal-tag">bear / oso</span>
+                <span class="animal-tag">rabbit / conejo</span>
+                <span class="animal-tag">bird / pájaro</span>
+                <span class="animal-tag">fish / pez</span>
+                <span class="animal-tag">snake / serpiente</span>
+                <span class="animal-tag">horse / caballo</span>
+                <span class="animal-tag">wolf / lobo</span>
+                <span class="animal-tag">fox / zorro</span>
+                <span class="animal-tag">zebra / cebra</span>
+                <span class="animal-tag">turtle / tortuga</span>
+                <span class="animal-tag">dolphin / delfín</span>
+                <span class="animal-tag">whale / ballena</span>
+                <span class="animal-tag">owl / búho</span>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // Load current language on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/voice/languages`);
+                const data = await response.json();
+                document.getElementById('language-select').value = data.current;
+            } catch (error) {
+                console.error('Failed to load language:', error);
+            }
+        });
+
+        // Set language button
+        document.getElementById('set-language-btn').addEventListener('click', async () => {
+            const language = document.getElementById('language-select').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/voice/language`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    alert(`Language set to ${language}`);
+                }
+            } catch (error) {
+                alert('Failed to set language: ' + error.message);
+            }
+        });
+
+        // Listen button
+        document.getElementById('listen-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('listen-btn');
+            const status = document.getElementById('voice-status');
+
+            btn.disabled = true;
+            status.style.display = 'flex';
+
+            try {
+                const response = await fetch(`${API_BASE}/voice/listen`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timeout: 5 })
+                });
+
+                const data = await response.json();
+
+                // Update recognized text
+                const textDiv = document.getElementById('recognized-text');
+                if (data.text) {
+                    textDiv.innerHTML = `<p class="recognized">"${data.text}"</p>`;
+                } else {
+                    textDiv.innerHTML = '<p class="no-speech">No speech detected</p>';
+                }
+
+                // Update detected animals
+                const animalsDiv = document.getElementById('detected-animals');
+                if (data.animals && data.animals.length > 0) {
+                    animalsDiv.innerHTML = data.animals.map(a =>
+                        `<span class="animal-chip">${a}</span>`
+                    ).join('');
+                } else {
+                    animalsDiv.innerHTML = '<p class="no-animals">No animals detected</p>';
+                }
+
+                // Update status
+                const statusDiv = document.getElementById('recognition-status');
+                statusDiv.innerHTML = `<p class="status-${data.status}">${data.status}</p>`;
+
+            } catch (error) {
+                document.getElementById('recognition-status').innerHTML =
+                    `<p class="status-error">Error: ${error.message}</p>`;
+            } finally {
+                btn.disabled = false;
+                status.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

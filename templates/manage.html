@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Cards - AI Storyteller</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📇 Card Management</h1>
+            <p class="subtitle">Register and manage RFID cards</p>
+        </header>
+
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/manage" class="active">Manage Cards</a>
+            <a href="/voice_test">Voice Test</a>
+        </nav>
+
+        <!-- Register New Card -->
+        <section class="form-section">
+            <h2>Register New Card</h2>
+            <form id="register-form" class="card-form">
+                <div class="form-group">
+                    <label for="card-uid">Card UID</label>
+                    <input type="text" id="card-uid" name="uid" placeholder="e.g., 1234567890" required>
+                    <small>The unique identifier on the RFID card</small>
+                </div>
+                <div class="form-group">
+                    <label for="card-animal">Animal Name</label>
+                    <input type="text" id="card-animal" name="animal" placeholder="e.g., cat, dog, lion" required>
+                    <small>The animal this card will represent</small>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span class="icon">💾</span>
+                    Save Card
+                </button>
+            </form>
+            <div id="form-message" class="form-message" style="display: none;"></div>
+        </section>
+
+        <!-- Registered Cards List -->
+        <section class="cards-section">
+            <h2>Registered Cards</h2>
+            <div id="cards-list" class="cards-list">
+                <p class="loading">Loading cards...</p>
+            </div>
+        </section>
+
+        <!-- Quick Add Animals -->
+        <section class="quick-add-section">
+            <h2>Quick Add (Common Animals)</h2>
+            <div class="quick-animals">
+                <button class="animal-btn" data-animal="cat">🐱 Cat</button>
+                <button class="animal-btn" data-animal="dog">🐶 Dog</button>
+                <button class="animal-btn" data-animal="lion">🦁 Lion</button>
+                <button class="animal-btn" data-animal="elephant">🐘 Elephant</button>
+                <button class="animal-btn" data-animal="giraffe">🦒 Giraffe</button>
+                <button class="animal-btn" data-animal="monkey">🐒 Monkey</button>
+                <button class="animal-btn" data-animal="bear">🐻 Bear</button>
+                <button class="animal-btn" data-animal="rabbit">🐰 Rabbit</button>
+                <button class="animal-btn" data-animal="bird">🐦 Bird</button>
+                <button class="animal-btn" data-animal="fish">🐟 Fish</button>
+                <button class="animal-btn" data-animal="turtle">🐢 Turtle</button>
+                <button class="animal-btn" data-animal="owl">🦉 Owl</button>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Card Management JavaScript
+        const API_BASE = '/api';
+
+        // Load cards on page load
+        document.addEventListener('DOMContentLoaded', loadCards);
+
+        // Register form submission
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const uid = document.getElementById('card-uid').value.trim();
+            const animal = document.getElementById('card-animal').value.trim();
+
+            if (!uid || !animal) {
+                showMessage('Please fill in both fields', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/cards/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid, animal })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'saved') {
+                    showMessage(`Card registered: ${uid} → ${animal}`, 'success');
+                    document.getElementById('register-form').reset();
+                    loadCards();
+                } else {
+                    showMessage(data.error || 'Failed to save card', 'error');
+                }
+            } catch (error) {
+                showMessage('Error saving card: ' + error.message, 'error');
+            }
+        });
+
+        // Quick add animal buttons
+        document.querySelectorAll('.animal-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('card-animal').value = btn.dataset.animal;
+                document.getElementById('card-uid').focus();
+            });
+        });
+
+        async function loadCards() {
+            const container = document.getElementById('cards-list');
+
+            try {
+                const response = await fetch(`${API_BASE}/cards`);
+                const cards = await response.json();
+
+                if (Object.keys(cards).length === 0) {
+                    container.innerHTML = '<p class="no-cards">No cards registered yet.</p>';
+                    return;
+                }
+
+                let html = '<table class="cards-table"><thead><tr>';
+                html += '<th>UID</th><th>Animal</th><th>Registered</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+
+                for (const [uid, info] of Object.entries(cards)) {
+                    const date = new Date(info.registered).toLocaleDateString();
+                    html += `<tr>
+                        <td><code>${uid}</code></td>
+                        <td>${info.animal}</td>
+                        <td>${date}</td>
+                        <td>
+                            <button class="btn btn-danger btn-small" onclick="deleteCard('${uid}')">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>`;
+                }
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
+
+            } catch (error) {
+                container.innerHTML = `<p class="error">Error loading cards: ${error.message}</p>`;
+            }
+        }
+
+        async function deleteCard(uid) {
+            if (!confirm(`Delete card ${uid}?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/cards/delete/${uid}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'deleted') {
+                    showMessage(`Card ${uid} deleted`, 'success');
+                    loadCards();
+                } else {
+                    showMessage(data.error || 'Failed to delete card', 'error');
+                }
+            } catch (error) {
+                showMessage('Error deleting card: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('form-message');
+            msg.textContent = text;
+            msg.className = `form-message ${type}`;
+            msg.style.display = 'block';
+
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

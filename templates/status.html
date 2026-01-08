@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Status - AI Storyteller</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 System Status</h1>
+            <p class="subtitle">Monitor and debug the storyteller system</p>
+        </header>
+
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/manage">Manage Cards</a>
+            <a href="/voice_test">Voice Test</a>
+        </nav>
+
+        <!-- System Status -->
+        <section class="status-detail-section">
+            <h2>Current State</h2>
+            <div id="system-state" class="status-grid">
+                <p>Loading...</p>
+            </div>
+            <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+        </section>
+
+        <!-- Audio Devices -->
+        <section class="audio-devices-section">
+            <h2>Audio Devices</h2>
+            <div id="audio-devices" class="devices-list">
+                <p>Loading...</p>
+            </div>
+        </section>
+
+        <!-- Cache Status -->
+        <section class="cache-section">
+            <h2>Audio Cache</h2>
+            <div id="cache-status" class="cache-info">
+                <p>Loading...</p>
+            </div>
+            <button id="clear-cache-btn" class="btn btn-danger">Clear Cache</button>
+        </section>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function loadStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+
+                // Update state
+                const stateDiv = document.getElementById('system-state');
+                stateDiv.innerHTML = `
+                    <div class="status-item">
+                        <span class="label">Selected Animals:</span>
+                        <span class="value">${data.state.selected_animals.join(', ') || 'None'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Is Generating:</span>
+                        <span class="value">${data.state.is_generating ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Is Playing:</span>
+                        <span class="value">${data.state.is_playing ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">TTS Provider:</span>
+                        <span class="value">${data.tts_provider}</span>
+                    </div>
+                `;
+
+                // Update audio devices
+                const devicesDiv = document.getElementById('audio-devices');
+                const devices = data.audio_devices;
+                devicesDiv.innerHTML = `
+                    <div class="device-info">
+                        <strong>Speaker:</strong> ${devices.has_speaker ? 'Available' : 'Not found'}
+                    </div>
+                    <div class="device-info">
+                        <strong>Microphone:</strong> ${devices.has_microphone ? 'Available' : 'Not found'}
+                    </div>
+                    <div class="device-info">
+                        <strong>Volume:</strong> ${devices.volume >= 0 ? devices.volume + '%' : 'Unknown'}
+                    </div>
+                `;
+
+                // Update cache
+                const cacheDiv = document.getElementById('cache-status');
+                const cache = data.cache;
+                cacheDiv.innerHTML = `
+                    <div class="cache-item">
+                        <span class="label">Files:</span>
+                        <span class="value">${cache.file_count}</span>
+                    </div>
+                    <div class="cache-item">
+                        <span class="label">Size:</span>
+                        <span class="value">${cache.total_size_mb} MB / ${cache.max_size_mb} MB</span>
+                    </div>
+                    <div class="cache-item">
+                        <span class="label">Usage:</span>
+                        <span class="value">${cache.usage_percent}%</span>
+                    </div>
+                `;
+
+            } catch (error) {
+                document.getElementById('system-state').innerHTML =
+                    `<p class="error">Error loading status: ${error.message}</p>`;
+            }
+        }
+
+        document.getElementById('refresh-btn').addEventListener('click', loadStatus);
+
+        document.getElementById('clear-cache-btn').addEventListener('click', async () => {
+            if (!confirm('Clear all cached audio files?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/cache/clear`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.status === 'cleared') {
+                    alert('Cache cleared');
+                    loadStatus();
+                }
+            } catch (error) {
+                alert('Failed to clear cache: ' + error.message);
+            }
+        });
+
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadStatus);
+
+        // Auto-refresh every 5 seconds
+        setInterval(loadStatus, 5000);
+    </script>
+</body>
+</html>

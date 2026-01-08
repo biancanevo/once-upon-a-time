@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Storyteller - Cuenta Cuentos</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎭 Cuenta Cuentos</h1>
+            <p class="subtitle">AI-powered Storyteller</p>
+        </header>
+
+        <nav class="nav-links">
+            <a href="/" class="active">Home</a>
+            <a href="/manage">Manage Cards</a>
+            <a href="/voice_test">Voice Test</a>
+        </nav>
+
+        <!-- Status Section -->
+        <section class="status-section">
+            <div id="status-indicator" class="status-indicator idle">
+                <span class="status-dot"></span>
+                <span id="status-text">Ready</span>
+            </div>
+        </section>
+
+        <!-- Selected Animals -->
+        <section class="animals-section">
+            <h2>Selected Animals</h2>
+            <div id="selected-animals" class="animal-chips">
+                <p class="no-animals">No animals selected yet. Tap an RFID card or use voice command.</p>
+            </div>
+            <div class="animal-actions">
+                <button id="clear-animals-btn" class="btn btn-secondary" disabled>Clear All</button>
+            </div>
+        </section>
+
+        <!-- Control Buttons -->
+        <section class="controls-section">
+            <button id="generate-btn" class="btn btn-primary btn-large">
+                <span class="icon">📖</span>
+                Generate Story
+            </button>
+            <button id="voice-btn" class="btn btn-secondary btn-large">
+                <span class="icon">🎤</span>
+                Voice Command
+            </button>
+        </section>
+
+        <!-- Story Display -->
+        <section class="story-section" id="story-section" style="display: none;">
+            <h2>Story</h2>
+            <div id="story-text" class="story-text"></div>
+
+            <!-- Audio Player -->
+            <div class="audio-section">
+                <h3>Audio Playback</h3>
+                <div id="audio-controls" class="audio-controls">
+                    <button id="play-btn" class="btn btn-primary" disabled>
+                        <span class="icon">▶️</span>
+                        Play Story
+                    </button>
+                    <button id="stop-btn" class="btn btn-secondary" disabled>
+                        <span class="icon">⏹️</span>
+                        Stop
+                    </button>
+                    <div class="volume-control">
+                        <label for="volume-slider">Volume</label>
+                        <input type="range" id="volume-slider" min="0" max="100" value="80">
+                    </div>
+                </div>
+                <div id="audio-progress" class="audio-progress">
+                    <span id="current-segment">-</span> / <span id="total-segments">-</span>
+                </div>
+                <audio id="audio-player" style="display: none;"></audio>
+            </div>
+        </section>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p id="loading-text">Generating story...</p>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
