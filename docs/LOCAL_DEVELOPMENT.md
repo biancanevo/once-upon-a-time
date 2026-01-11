@@ -27,11 +27,8 @@ source venv/bin/activate  # Linux/macOS
 ### 3. Install Dependencies
 
 ```bash
-# Production dependencies
-pip install -r requirements.txt
-
-# Development dependencies (includes testing tools)
-pip install -r requirements-dev.txt
+# Install in editable mode with development tools
+pip install -e ".[dev]"
 ```
 
 ### 4. Configure Environment
@@ -71,7 +68,7 @@ If Ollama is not available, set `MOCK_OLLAMA=True` for mock responses.
 ### Development Server
 
 ```bash
-python -m raspi_storyteller.app
+raspi-storyteller
 ```
 
 Access at:
@@ -82,7 +79,7 @@ Access at:
 ### With Hot Reload
 
 ```bash
-FLASK_DEBUG=True python -m raspi_storyteller.app
+FLASK_DEBUG=True raspi-storyteller
 ```
 
 ## Running Tests
@@ -139,7 +136,7 @@ mypy src/
 ### Enable Debug Logging
 
 ```bash
-LOG_LEVEL=DEBUG python -m raspi_storyteller.app
+LOG_LEVEL=DEBUG raspi-storyteller
 ```
 
 ### Test Individual Components

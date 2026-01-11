@@ -78,7 +78,12 @@ cd once-upon-a-time
 
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install .
+```
+
+For development with additional tools:
+```bash
+pip install -e ".[dev,raspberry-pi]"
 ```
 
 ### 5. Configure for Production
@@ -103,7 +108,7 @@ OLLAMA_MODEL=gemma3:1b
 
 ```bash
 source venv/bin/activate
-python -m raspi_storyteller.app
+raspi-storyteller
 ```
 
 Access http://YOUR_PI_IP:5000 from another device.
@@ -128,7 +133,7 @@ User=pi
 WorkingDirectory=/home/pi/once-upon-a-time
 Environment="PATH=/home/pi/once-upon-a-time/venv/bin"
 Environment="FLASK_ENV=production"
-ExecStart=/home/pi/once-upon-a-time/venv/bin/python -m raspi_storyteller.app
+ExecStart=/home/pi/once-upon-a-time/venv/bin/raspi-storyteller
 Restart=always
 RestartSec=10
 
@@ -227,7 +232,7 @@ amixer set PCM 100%
 
 ```bash
 # Must run as root for GPIO access
-sudo python -m raspi_storyteller.app
+sudo /home/pi/once-upon-a-time/venv/bin/raspi-storyteller
 
 # Or add user to gpio group
 sudo usermod -a -G gpio $USER
@@ -242,7 +247,7 @@ sudo journalctl -u storyteller.service -n 100
 # Test manually
 cd /home/pi/once-upon-a-time
 source venv/bin/activate
-python -m raspi_storyteller.app
+raspi-storyteller
 ```
 
 ## Backup and Restore
@@ -266,6 +271,6 @@ sudo systemctl restart storyteller.service
 cd ~/once-upon-a-time
 git pull origin main
 source venv/bin/activate
-pip install -r requirements.txt
+pip install --upgrade .
 sudo systemctl restart storyteller.service
 ```

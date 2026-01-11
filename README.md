@@ -31,14 +31,21 @@ cd once-upon-a-time
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install package and dependencies
+pip install -e .
+
+# Or for development with all tools:
+# pip install -e ".[dev]"
 
 # Copy environment configuration
 cp .env.example .env
 
 # Run the application
-python -m raspi_storyteller.app
+# Option 1: Using installed command (recommended)
+raspi-storyteller
+
+# Option 2: Using Python module
+# python -m raspi_storyteller
 ```
 
 ### Access the Web Interface
@@ -47,6 +54,16 @@ python -m raspi_storyteller.app
 - Card Management: http://localhost:5000/manage
 - Voice Test: http://localhost:5000/voice_test
 - System Status: http://localhost:5000/status
+
+### Verify Installation
+
+```bash
+# Check package is installed
+pip show raspi_storyteller
+
+# Check command is available
+which raspi-storyteller
+```
 
 ## Project Structure
 

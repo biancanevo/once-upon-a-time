@@ -1,26 +1,2 @@
-# Include production requirements
--r requirements.txt
-
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
-pytest-timeout>=2.2.0
-pytest-mock>=3.12.0
-
-# Mocking
-responses>=0.24.0
-
-# Code Quality
-flake8>=6.1.0
-black>=23.0.0
-isort>=5.12.0
-mypy>=1.5.0
-
-# Memory Profiling (for load tests)
-memory-profiler>=0.61.0
-psutil>=5.9.0
-
-# Documentation
-sphinx>=7.0.0
-sphinx-rtd-theme>=1.3.0
+# Install with dev dependencies
+-e .[dev]
