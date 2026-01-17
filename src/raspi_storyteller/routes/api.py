@@ -431,3 +431,110 @@ def clear_cache():
         return jsonify({"status": "cleared"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# Hardware simulation endpoints (for development)
+
+@api_bp.route("/hardware/leds", methods=["GET"])
+def get_led_state():
+    """
+    Get current LED ring state (for development/mock mode).
+
+    Response JSON:
+    {
+        "led_count": 12,
+        "pixels": [[255, 0, 0], [0, 255, 0], ...],
+        "current_color": [255, 0, 0],
+        "mock": true
+    }
+    """
+    try:
+        led_controller = current_app.led_controller
+
+        # Check if it's a mock controller
+        from ..hardware.led_controller import MockLEDController
+        is_mock = isinstance(led_controller, MockLEDController)
+
+        if not is_mock:
+            return jsonify({
+                "error": "LED state only available in mock mode",
+                "mock": False
+            }), 400
+
+        # Get pixel data from mock controller
+        pixels = [list(led_controller.get_pixel(i)) for i in range(led_controller.led_count)]
+
+        return jsonify({
+            "led_count": led_controller.led_count,
+            "pixels": pixels,
+            "current_color": list(led_controller.get_current_color()),
+            "mock": True
+        })
+    except Exception as e:
+        logger.error(f"API error in get_led_state: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/hardware/rfid/inject", methods=["POST"])
+def inject_rfid_card():
+    """
+    Inject an RFID card (for development/mock mode).
+
+    Request JSON:
+    {
+        "animal": "cat"  # Animal name (will look up registered card or use default UID)
+    }
+
+    Response JSON:
+    {
+        "status": "injected",
+        "animal": "cat",
+        "uid": "12345"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        animal = data.get("animal")
+
+        if not animal:
+            return jsonify({"error": "Animal name required"}), 400
+
+        rfid_handler = current_app.rfid_handler
+        state = current_app.state
+
+        # Check if it's a mock handler
+        from ..hardware.rfid_handler import MockRFIDHandler
+        is_mock = isinstance(rfid_handler, MockRFIDHandler)
+
+        if not is_mock:
+            return jsonify({
+                "error": "RFID injection only available in mock mode",
+                "mock": False
+            }), 400
+
+        # Find a registered card for this animal, or create a new one
+        uid = None
+        for card_uid, card_data in state.cards_db.items():
+            if card_data.get("animal") == animal:
+                uid = card_uid
+                break
+
+        # If no card found, create a temporary one
+        if not uid:
+            import hashlib
+            uid = hashlib.md5(animal.encode()).hexdigest()[:8]
+            state.register_card(uid, animal)
+            logger.info(f"Auto-registered card {uid} for animal: {animal}")
+
+        # Inject the card
+        rfid_handler.inject_card(uid, animal)
+        logger.info(f"Injected RFID card: {uid} -> {animal}")
+
+        return jsonify({
+            "status": "injected",
+            "animal": animal,
+            "uid": uid
+        })
+    except Exception as e:
+        logger.error(f"API error in inject_rfid_card: {e}")
+        return jsonify({"error": str(e)}), 500

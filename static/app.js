@@ -32,15 +32,20 @@ const elements = {
     loadingOverlay: document.getElementById('loading-overlay'),
     loadingText: document.getElementById('loading-text'),
     statusIndicator: document.getElementById('status-indicator'),
-    statusText: document.getElementById('status-text')
+    statusText: document.getElementById('status-text'),
+    ledRing: document.getElementById('led-ring'),
+    rfidButtons: document.getElementById('rfid-buttons')
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    initializeLEDRing();
     loadCurrentState();
     // Poll for state updates (for RFID card detection)
     setInterval(loadCurrentState, 2000);
+    // Poll for LED state updates
+    setInterval(updateLEDRing, 200);
 });
 
 function setupEventListeners() {
@@ -65,6 +70,17 @@ function setupEventListeners() {
     // Audio player events
     elements.audioPlayer.addEventListener('ended', onSegmentEnded);
     elements.audioPlayer.addEventListener('error', onAudioError);
+
+    // RFID simulation buttons
+    if (elements.rfidButtons) {
+        const rfidButtons = elements.rfidButtons.querySelectorAll('.rfid-btn');
+        rfidButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const animal = btn.getAttribute('data-animal');
+                simulateRFIDTap(animal);
+            });
+        });
+    }
 }
 
 async function loadCurrentState() {
@@ -332,6 +348,81 @@ function showLoading(text = 'Loading...') {
 
 function hideLoading() {
     elements.loadingOverlay.style.display = 'none';
+}
+
+// LED Ring Functions
+
+function initializeLEDRing() {
+    if (!elements.ledRing) return;
+
+    // Create 12 LED elements in a circle
+    const ledCount = 12;
+    for (let i = 0; i < ledCount; i++) {
+        const led = document.createElement('div');
+        led.className = 'led-pixel';
+        led.dataset.index = i;
+        elements.ledRing.appendChild(led);
+    }
+}
+
+async function updateLEDRing() {
+    if (!elements.ledRing) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/hardware/leds`);
+        if (!response.ok) return; // Silently fail if not in mock mode
+
+        const data = await response.json();
+        if (!data.mock) return;
+
+        // Update each LED pixel
+        const ledPixels = elements.ledRing.querySelectorAll('.led-pixel');
+        data.pixels.forEach((color, index) => {
+            if (ledPixels[index]) {
+                const [r, g, b] = color;
+                ledPixels[index].style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+                // Add glow effect if LED is on
+                if (r > 0 || g > 0 || b > 0) {
+                    ledPixels[index].style.boxShadow = `0 0 10px rgba(${r}, ${g}, ${b}, 0.8)`;
+                } else {
+                    ledPixels[index].style.boxShadow = 'none';
+                }
+            }
+        });
+    } catch (error) {
+        // Silently fail - hardware simulation may not be available
+    }
+}
+
+// RFID Simulation Functions
+
+async function simulateRFIDTap(animal) {
+    try {
+        const response = await fetch(`${API_BASE}/hardware/rfid/inject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ animal })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'injected') {
+            // Visual feedback
+            const btn = elements.rfidButtons.querySelector(`[data-animal="${animal}"]`);
+            if (btn) {
+                btn.classList.add('tapped');
+                setTimeout(() => btn.classList.remove('tapped'), 500);
+            }
+
+            // The RFID polling loop will pick up the injected card
+            // and add it to selected animals automatically
+            setTimeout(loadCurrentState, 500);
+        } else {
+            console.error('Failed to inject RFID card:', data.error);
+        }
+    } catch (error) {
+        console.error('RFID injection failed:', error);
+    }
 }
 
 // Make removeAnimal available globally for onclick handlers
