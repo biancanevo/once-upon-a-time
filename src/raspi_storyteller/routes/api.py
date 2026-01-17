@@ -139,9 +139,20 @@ def get_current_story():
 def serve_audio(filename):
     """Serve audio files from the cache directory."""
     try:
+        # Get cache directory and ensure it's an absolute path
         cache_dir = current_app.config.get("AUDIO_CACHE_DIR", "./audio_cache")
+        if isinstance(cache_dir, Path):
+            cache_dir = cache_dir.resolve()
+        else:
+            cache_dir = Path(cache_dir).resolve()
+
+        audio_path = cache_dir / filename
+        if not audio_path.exists():
+            logger.error(f"Audio file not found: {audio_path}")
+            return jsonify({"error": "Audio file not found"}), 404
+
         return send_from_directory(
-            cache_dir,
+            str(cache_dir),
             filename,
             mimetype="audio/mpeg" if filename.endswith(".mp3") else "audio/wav"
         )

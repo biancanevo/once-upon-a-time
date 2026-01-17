@@ -10,6 +10,7 @@ Supports:
 import asyncio
 import os
 import tempfile
+import threading
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -20,8 +21,11 @@ from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Thread pool for sync operations
-_executor = ThreadPoolExecutor(max_workers=4)
+# Thread pool for sync operations (single worker for pyttsx3 to avoid espeak crashes)
+_executor = ThreadPoolExecutor(max_workers=1)
+
+# Lock for pyttsx3/espeak which is NOT thread-safe
+_pyttsx3_lock = threading.Lock()
 
 
 class TTSProviderBase(ABC):
@@ -84,16 +88,34 @@ class EdgeTTSProvider(TTSProviderBase):
 class Pyttsx3Provider(TTSProviderBase):
     """pyttsx3 provider (offline, cross-platform)."""
 
-    def __init__(self, rate: int = 150, volume: float = 1.0):
+    # Language code to espeak voice mapping
+    LANGUAGE_VOICES = {
+        "es": "spanish",
+        "es-ES": "spanish",
+        "es-MX": "spanish-latin-am",
+        "en": "english",
+        "en-US": "english-us",
+        "en-GB": "english",
+        "fr": "french",
+        "de": "german",
+        "it": "italian",
+        "pt": "portuguese",
+        "pt-BR": "brazil",
+    }
+
+    def __init__(self, rate: int = 150, volume: float = 1.0, language: str = "es-ES"):
         """
         Initialize pyttsx3 provider.
 
         Args:
             rate: Speech rate (words per minute).
             volume: Volume level (0.0 to 1.0).
+            language: Language code (e.g., 'es-ES', 'en-US').
         """
         self.rate = rate
         self.volume = volume
+        self.language = language
+        self._voice_name = self.LANGUAGE_VOICES.get(language, "spanish")
         self._engine = None
 
     def _get_engine(self):
@@ -123,25 +145,62 @@ class Pyttsx3Provider(TTSProviderBase):
             return False
 
     def _synthesize_sync(self, text: str, output_path: str) -> bool:
-        """Synchronous synthesis (runs in thread pool)."""
-        try:
-            import pyttsx3
+        """Synchronous synthesis (runs in thread pool with lock to prevent espeak crashes)."""
+        # Use lock because espeak-ng is NOT thread-safe and will crash with
+        # "double free or corruption" if multiple pyttsx3 engines run concurrently
+        with _pyttsx3_lock:
+            try:
+                import pyttsx3
 
-            # Create a fresh engine each time to avoid threading issues
-            engine = pyttsx3.init()
-            engine.setProperty("rate", self.rate)
-            engine.setProperty("volume", self.volume)
-            engine.save_to_file(text, output_path)
-            engine.runAndWait()
-            engine.stop()
-            logger.debug(f"pyttsx3 synthesized: {output_path}")
-            return True
-        except ImportError:
-            logger.error("pyttsx3 not installed")
-            return False
-        except Exception as e:
-            logger.error(f"pyttsx3 sync synthesis failed: {e}")
-            return False
+                # Create a fresh engine each time
+                engine = pyttsx3.init()
+                engine.setProperty("rate", self.rate)
+                engine.setProperty("volume", self.volume)
+
+                # Set voice/language
+                voices = engine.getProperty("voices")
+                target_voice = None
+                for voice in voices:
+                    # Match by language name (e.g., "spanish", "english")
+                    if self._voice_name.lower() in voice.name.lower():
+                        target_voice = voice.id
+                        break
+                    # Also check voice.languages if available
+                    if hasattr(voice, "languages") and voice.languages:
+                        for lang in voice.languages:
+                            if self._voice_name.lower() in str(lang).lower():
+                                target_voice = voice.id
+                                break
+
+                if target_voice:
+                    engine.setProperty("voice", target_voice)
+                    logger.debug(f"pyttsx3 using voice: {target_voice}")
+
+                engine.save_to_file(text, output_path)
+                engine.runAndWait()
+                engine.stop()
+                # Explicitly delete to help cleanup
+                del engine
+
+                # Verify file was actually created (pyttsx3 can silently fail)
+                if not Path(output_path).exists():
+                    logger.error(f"pyttsx3 failed to create file: {output_path}")
+                    return False
+
+                # Verify file has content (not empty)
+                if Path(output_path).stat().st_size == 0:
+                    logger.error(f"pyttsx3 created empty file: {output_path}")
+                    Path(output_path).unlink()  # Remove empty file
+                    return False
+
+                logger.debug(f"pyttsx3 synthesized: {output_path}")
+                return True
+            except ImportError:
+                logger.error("pyttsx3 not installed")
+                return False
+            except Exception as e:
+                logger.error(f"pyttsx3 sync synthesis failed: {e}")
+                return False
 
 
 class GoogleTTSProvider(TTSProviderBase):
@@ -231,6 +290,7 @@ class TTSEngine:
         cache_dir: str = "./audio_cache",
         max_cache_size_mb: int = 500,
         voice: str = "es-ES-PabloNeural",
+        language: str = "es-ES",
         enable_fallback: bool = True,
     ):
         """
@@ -241,11 +301,13 @@ class TTSEngine:
             cache_dir: Directory for audio cache.
             max_cache_size_mb: Maximum cache size in MB.
             voice: Voice identifier for Edge TTS.
+            language: Language code for TTS (e.g., 'es-ES', 'en-US').
             enable_fallback: Whether to try fallback providers on failure.
         """
         self.provider_name = provider
         self.enable_fallback = enable_fallback
         self.voice = voice
+        self.language = language
 
         # Initialize cache
         self.cache = AudioCache(cache_dir, max_cache_size_mb)
@@ -253,21 +315,24 @@ class TTSEngine:
         # Initialize primary provider
         self.provider = self._create_provider(provider)
 
-        logger.info(f"TTSEngine initialized with provider: {provider}")
+        logger.info(f"TTSEngine initialized with provider: {provider}, language: {language}")
 
     def _create_provider(self, name: str) -> TTSProviderBase:
         """Create a TTS provider by name."""
+        # Extract short language code (e.g., 'es' from 'es-ES')
+        lang_short = self.language.split("-")[0] if self.language else "es"
+
         if name == "edge":
             return EdgeTTSProvider(voice=self.voice)
         elif name == "pyttsx3":
-            return Pyttsx3Provider()
+            return Pyttsx3Provider(language=self.language)
         elif name == "google":
-            return GoogleTTSProvider()
+            return GoogleTTSProvider(lang=lang_short)
         elif name == "mock":
             return MockTTSProvider()
         else:
             logger.warning(f"Unknown provider '{name}', using pyttsx3")
-            return Pyttsx3Provider()
+            return Pyttsx3Provider(language=self.language)
 
     async def synthesize_async(
         self, text: str, cache_key: Optional[str] = None

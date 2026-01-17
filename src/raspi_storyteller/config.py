@@ -8,8 +8,37 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+def _find_and_load_dotenv():
+    """
+    Find and load .env file from multiple possible locations.
+
+    Search order:
+    1. Current working directory
+    2. ~/.config/raspi-storyteller/.env
+    3. ~/.raspi-storyteller.env
+    4. Project directory (where this file is located)
+    """
+    possible_paths = [
+        Path.cwd() / ".env",  # Current directory
+        Path.home() / ".config" / "raspi-storyteller" / ".env",  # XDG config
+        Path.home() / ".raspi-storyteller.env",  # Home directory
+        Path(__file__).parent.parent.parent / ".env",  # Project root
+    ]
+
+    for env_path in possible_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            print(f"📁 Loaded config from: {env_path}")
+            return str(env_path)
+
+    # No .env found, use defaults
+    load_dotenv()  # Still call to load any system env vars
+    return None
+
+
 # Load environment variables from .env file
-load_dotenv()
+_loaded_env_path = _find_and_load_dotenv()
 
 
 class Config:
@@ -68,7 +97,7 @@ class DevelopmentConfig(Config):
 
     DEBUG = True
     MOCK_HARDWARE = True
-    TTS_PROVIDER = "pyttsx3"  # Offline provider for local development
+    # TTS_PROVIDER inherited from Config (respects .env)
 
 
 class ProductionConfig(Config):
@@ -76,7 +105,7 @@ class ProductionConfig(Config):
 
     DEBUG = False
     MOCK_HARDWARE = False
-    TTS_PROVIDER = "edge"  # Online provider with better quality
+    # TTS_PROVIDER inherited from Config (respects .env)
 
 
 class TestingConfig(Config):
@@ -86,7 +115,7 @@ class TestingConfig(Config):
     DEBUG = True
     MOCK_HARDWARE = True
     MOCK_OLLAMA = True
-    TTS_PROVIDER = "pyttsx3"
+    # TTS_PROVIDER inherited from Config (respects .env)
     AUDIO_CACHE_DIR = Path("./test_audio_cache")
     LOG_LEVEL = "WARNING"
 

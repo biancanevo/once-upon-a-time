@@ -75,8 +75,9 @@ def create_app(config_class=None):
         cache_dir=str(config_class.AUDIO_CACHE_DIR),
         max_cache_size_mb=config_class.MAX_CACHE_SIZE_MB,
         voice=config_class.EDGE_TTS_VOICE,
+        language=config_class.SPEECH_LANGUAGE,
     )
-    logger.info(f"TTSEngine initialized with provider: {config_class.TTS_PROVIDER}")
+    logger.info(f"TTSEngine initialized with provider: {config_class.TTS_PROVIDER}, language: {config_class.SPEECH_LANGUAGE}")
 
     # Audio Manager
     app.audio_manager = AudioManager(mock=mock_mode)
@@ -91,13 +92,16 @@ def create_app(config_class=None):
     logger.info("SpeechRecognizer initialized")
 
     # Story Generator
+    # Extract short language code (e.g., 'it' from 'it-IT' or 'it')
+    story_language = config_class.SPEECH_LANGUAGE.split("-")[0] if config_class.SPEECH_LANGUAGE else "es"
     app.story_generator = StoryGenerator(
         ollama_host=config_class.OLLAMA_HOST,
         model=config_class.OLLAMA_MODEL,
         timeout=config_class.OLLAMA_TIMEOUT,
+        language=story_language,
         mock=mock_ollama,
     )
-    logger.info("StoryGenerator initialized")
+    logger.info(f"StoryGenerator initialized with language: {story_language}")
 
     # Audio Device Manager
     app.audio_device = AudioDeviceManager(mock=mock_mode)
