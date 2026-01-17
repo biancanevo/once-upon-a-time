@@ -53,6 +53,17 @@ The story should:
 
 Write only the story, without introduction or additional comments."""
 
+    PROMPT_TEMPLATE_IT = """Sei un narratore di storie per bambini. Genera una storia breve,
+divertente ed educativa di 3-4 paragrafi sui seguenti animali: {animals}.
+
+La storia deve:
+- Essere appropriata per bambini di 4-8 anni
+- Avere una morale o un insegnamento
+- Usare un linguaggio semplice e descrittivo
+- Includere dialoghi tra i personaggi
+
+Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
+
     def __init__(
         self,
         ollama_host: str = "http://localhost:11434",
@@ -105,7 +116,10 @@ Write only the story, without introduction or additional comments."""
 
         if self.language == "es":
             return self.PROMPT_TEMPLATE_ES.format(animals=animals_str)
-        return self.PROMPT_TEMPLATE_EN.format(animals=animals_str)
+        elif self.language == "it":
+            return self.PROMPT_TEMPLATE_IT.format(animals=animals_str)
+        else:  # English is default
+            return self.PROMPT_TEMPLATE_EN.format(animals=animals_str)
 
     def _get_mock_story(self, animals: List[str]) -> str:
         """Return a mock story for testing."""
@@ -119,7 +133,15 @@ Un día, encontraron un pequeño pájaro que había caído de su nido. "¡Tenemo
 La mamá pájaro estaba muy agradecida. "Gracias, amables amigos," cantó ella. "Su bondad será recompensada."
 
 Desde ese día, todos los animales del bosque aprendieron que la amistad y la ayuda mutua son los tesoros más valiosos. Y nuestros amigos vivieron felices, siempre dispuestos a ayudar a quien lo necesitara."""
-        else:
+        elif self.language == "it":
+            return f"""C'era una volta in un bosco magico, {animals_str} che erano i migliori amici. Anche se erano molto diversi, giocavano sempre insieme e si aiutavano a vicenda.
+
+Un giorno, trovarono un uccellino che era caduto dal suo nido. "Dobbiamo aiutarlo!" disse uno di loro. Insieme, lavorarono per riportare l'uccellino a casa.
+
+La mamma uccello era molto grata. "Grazie, cari amici," cantò lei. "La vostra gentilezza sarà ricompensata."
+
+Da quel giorno, tutti gli animali del bosco impararono che l'amicizia e l'aiuto reciproco sono i tesori più preziosi. E i nostri amici vissero felici, sempre pronti ad aiutare chiunque ne avesse bisogno."""
+        else:  # English is default
             return f"""Once upon a time in a magical forest, there lived {animals_str} who were the best of friends. Although they were very different, they always played together and helped each other.
 
 One day, they found a little bird that had fallen from its nest. "We must help it!" said one of them. Together, they worked to return the bird to its home.
