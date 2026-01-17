@@ -136,8 +136,14 @@ def create_app(config_class=None):
         if animal:
             logger.info(f"Card {uid} mapped to animal: {animal}")
             app.state.add_animal(animal)
+            # Trigger success animation for visual feedback
+            if app.led_animator:
+                app.led_animator.animate_success(duration=0.5)
         else:
             logger.warning(f"Unknown card: {uid}")
+            # Trigger error animation for unknown cards
+            if app.led_animator:
+                app.led_animator.animate_error(duration=0.5)
 
     app.rfid_polling = RFIDPollingLoop(
         handler=rfid_handler,

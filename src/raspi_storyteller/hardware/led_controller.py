@@ -273,7 +273,8 @@ class LEDAnimator:
                     self.controller.set_color((0, b, 0))
                     time.sleep(0.02)
             self._running = False
-            self.controller.clear()
+            # Return to idle state instead of clearing
+            self.controller.set_color((10, 10, 10))
 
         self._thread = threading.Thread(target=self._run_animation, args=("success", _success))
         self._thread.daemon = True
@@ -292,6 +293,8 @@ class LEDAnimator:
                 self.controller.clear()
                 time.sleep(0.2)
             self._running = False
+            # Return to idle state instead of clearing
+            self.controller.set_color((10, 10, 10))
 
         self._thread = threading.Thread(target=self._run_animation, args=("error", _error))
         self._thread.daemon = True

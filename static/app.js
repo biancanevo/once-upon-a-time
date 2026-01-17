@@ -15,32 +15,36 @@ const state = {
     isPlaying: false
 };
 
-// DOM Elements
-const elements = {
-    selectedAnimals: document.getElementById('selected-animals'),
-    clearAnimalsBtn: document.getElementById('clear-animals-btn'),
-    generateBtn: document.getElementById('generate-btn'),
-    voiceBtn: document.getElementById('voice-btn'),
-    storySection: document.getElementById('story-section'),
-    storyText: document.getElementById('story-text'),
-    playBtn: document.getElementById('play-btn'),
-    stopBtn: document.getElementById('stop-btn'),
-    volumeSlider: document.getElementById('volume-slider'),
-    audioPlayer: document.getElementById('audio-player'),
-    currentSegment: document.getElementById('current-segment'),
-    totalSegments: document.getElementById('total-segments'),
-    loadingOverlay: document.getElementById('loading-overlay'),
-    loadingText: document.getElementById('loading-text'),
-    statusIndicator: document.getElementById('status-indicator'),
-    statusText: document.getElementById('status-text'),
-    ledRing: document.getElementById('led-ring'),
-    rfidButtons: document.getElementById('rfid-buttons')
-};
+// DOM Elements (will be initialized after DOM loads)
+let elements = {};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize DOM elements after DOM is ready
+    elements = {
+        selectedAnimals: document.getElementById('selected-animals'),
+        clearAnimalsBtn: document.getElementById('clear-animals-btn'),
+        generateBtn: document.getElementById('generate-btn'),
+        voiceBtn: document.getElementById('voice-btn'),
+        storySection: document.getElementById('story-section'),
+        storyText: document.getElementById('story-text'),
+        playBtn: document.getElementById('play-btn'),
+        stopBtn: document.getElementById('stop-btn'),
+        volumeSlider: document.getElementById('volume-slider'),
+        audioPlayer: document.getElementById('audio-player'),
+        currentSegment: document.getElementById('current-segment'),
+        totalSegments: document.getElementById('total-segments'),
+        loadingOverlay: document.getElementById('loading-overlay'),
+        loadingText: document.getElementById('loading-text'),
+        statusIndicator: document.getElementById('status-indicator'),
+        statusText: document.getElementById('status-text'),
+        ledRing: document.getElementById('led-ring'),
+        rfidButtons: document.getElementById('rfid-buttons')
+    };
+
     setupEventListeners();
     initializeLEDRing();
+    loadRegisteredCards();
     loadCurrentState();
     // Poll for state updates (for RFID card detection)
     setInterval(loadCurrentState, 2000);
@@ -71,15 +75,51 @@ function setupEventListeners() {
     elements.audioPlayer.addEventListener('ended', onSegmentEnded);
     elements.audioPlayer.addEventListener('error', onAudioError);
 
-    // RFID simulation buttons
-    if (elements.rfidButtons) {
-        const rfidButtons = elements.rfidButtons.querySelectorAll('.rfid-btn');
-        rfidButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const animal = btn.getAttribute('data-animal');
+    // RFID simulation buttons will be set up dynamically
+    // See loadRegisteredCards() function
+}
+
+async function loadRegisteredCards() {
+    try {
+        const response = await fetch(`${API_BASE}/cards`);
+        const cards = await response.json();
+
+        if (!elements.rfidButtons) return;
+
+        // Clear existing buttons
+        elements.rfidButtons.innerHTML = '';
+
+        // Check if there are any registered cards
+        if (Object.keys(cards).length === 0) {
+            elements.rfidButtons.innerHTML = '<p class="no-cards">No cards registered yet. Go to <a href="/manage">Manage Cards</a> to register some.</p>';
+            return;
+        }
+
+        // Create a button for each registered card
+        for (const [uid, cardInfo] of Object.entries(cards)) {
+            const animal = cardInfo.animal;
+            const emoji = getAnimalEmoji(animal);
+
+            const button = document.createElement('button');
+            button.className = 'rfid-btn';
+            button.setAttribute('data-animal', animal);
+            button.setAttribute('data-uid', uid);
+            button.innerHTML = `${emoji} ${animal.charAt(0).toUpperCase() + animal.slice(1)}`;
+
+            // Add click event listener
+            button.addEventListener('click', () => {
                 simulateRFIDTap(animal);
             });
-        });
+
+            elements.rfidButtons.appendChild(button);
+        }
+
+        console.log(`Loaded ${Object.keys(cards).length} registered cards`);
+    } catch (error) {
+        console.error('Failed to load registered cards:', error);
+        if (elements.rfidButtons) {
+            elements.rfidButtons.innerHTML = '<p class="error">Failed to load cards. Check console for details.</p>';
+        }
     }
 }
 
