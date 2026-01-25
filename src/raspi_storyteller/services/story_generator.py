@@ -44,6 +44,7 @@ STORY ELEMENTS:
 INSTRUCTIONS:
 1. TARGET AUDIENCE: Children ages 4-8. Use simple, descriptive language appropriate for this age.
 2. PLOT STRUCTURE:
+   - Do NOT return title, introduction, or "Here is the story" or any other text that is not the story suchs as **title** or **end of the story**.
    - Beginning: Introduce the protagonists ({protagonists}) in the {environment}.
    - Middle: Introduce a conflict involving the moral lesson ({moral_lesson}). If there are generic villains/felons ({antagonists}), use them to create obstacles.
    - Climax: The protagonists overcome the challenge/villain using the moral lesson.
@@ -61,6 +62,7 @@ INSTRUCTIONS:
 
 VERY IMPORTANT: 
 - No harmful content.
+- DO NOT use complex or abstract concepts.
 - Always keep in mind taht this is a story for kids up to 8 years old.
 - Use simple, descriptive language appropriate for this age.
 - You MUST generate the story in {target_language}.
@@ -68,8 +70,6 @@ VERY IMPORTANT:
 - The story should be {length_description}, approximately {word_target} words, divided into {paragraph_range} paragraphs.
 - Do not use symbols or special characters that cannot be pronounced.
 - ALWAYS KEEP IN MIND that the story will be read by an adult for a child.
-- DO NOT use complex or abstract concepts.
-
 """
 
 
