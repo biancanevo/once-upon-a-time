@@ -1,15 +1,24 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ lang }}">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Cards - AI Storyteller</title>
+    <title>{{ t.title_manage }} - {{ t.subtitle }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <style>
         /* Card type specific colors */
-        .card-type-character { border-left: 4px solid var(--success-color); }
-        .card-type-environment { border-left: 4px solid #3b82f6; }
-        .card-type-moral_lesson { border-left: 4px solid #a855f7; }
+        .card-type-character {
+            border-left: 4px solid var(--success-color);
+        }
+
+        .card-type-environment {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .card-type-moral_lesson {
+            border-left: 4px solid #a855f7;
+        }
 
         .type-badge {
             display: inline-block;
@@ -19,9 +28,21 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        .type-badge.character { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
-        .type-badge.environment { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        .type-badge.moral_lesson { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+
+        .type-badge.character {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success-color);
+        }
+
+        .type-badge.environment {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .type-badge.moral_lesson {
+            background: rgba(168, 85, 247, 0.2);
+            color: #a855f7;
+        }
 
         .role-badge {
             display: inline-block;
@@ -61,9 +82,17 @@
             color: white;
         }
 
-        .species-tab.character.active { background: var(--success-color); }
-        .species-tab.environment.active { background: #3b82f6; }
-        .species-tab.moral_lesson.active { background: #a855f7; }
+        .species-tab.character.active {
+            background: var(--success-color);
+        }
+
+        .species-tab.environment.active {
+            background: #3b82f6;
+        }
+
+        .species-tab.moral_lesson.active {
+            background: #a855f7;
+        }
 
         .species-list {
             display: flex;
@@ -139,9 +168,20 @@
             background: rgba(99, 102, 241, 0.2);
         }
 
-        .type-option.character.selected { border-color: var(--success-color); background: rgba(34, 197, 94, 0.15); }
-        .type-option.environment.selected { border-color: #3b82f6; background: rgba(59, 130, 246, 0.15); }
-        .type-option.moral_lesson.selected { border-color: #a855f7; background: rgba(168, 85, 247, 0.15); }
+        .type-option.character.selected {
+            border-color: var(--success-color);
+            background: rgba(34, 197, 94, 0.15);
+        }
+
+        .type-option.environment.selected {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .type-option.moral_lesson.selected {
+            border-color: #a855f7;
+            background: rgba(168, 85, 247, 0.15);
+        }
 
         .type-option .icon {
             font-size: 2rem;
@@ -179,70 +219,71 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
-            <h1>Card Management</h1>
-            <p class="subtitle">Register and manage RFID cards</p>
+            <h1>{{ t.title_manage }}</h1>
+            <p class="subtitle">{{ t.subtitle_manage }}</p>
         </header>
 
         <nav class="nav-links">
-            <a href="/">Home</a>
-            <a href="/manage" class="active">Manage Cards</a>
-            <a href="/voice_test">Voice Test</a>
+            <a href="/">{{ t.nav_home }}</a>
+            <a href="/manage" class="active">{{ t.nav_manage }}</a>
+            <a href="/voice_test">{{ t.nav_voice }}</a>
         </nav>
 
         <!-- Register New Card -->
         <section class="form-section">
-            <h2>Register New Card</h2>
+            <h2>{{ t.title_register }}</h2>
 
             <!-- Card Type Selector -->
             <div class="form-group">
-                <label>Card Type</label>
+                <label>{{ t.label_card_type }}</label>
                 <div class="type-selector">
                     <div class="type-option character selected" data-type="character">
                         <span class="icon">&#129409;</span>
-                        <span class="label">Character</span>
+                        <span class="label">{{ t.type_character }}</span>
                     </div>
                     <div class="type-option environment" data-type="environment">
                         <span class="icon">&#127795;</span>
-                        <span class="label">Environment</span>
+                        <span class="label">{{ t.type_environment }}</span>
                     </div>
                     <div class="type-option moral_lesson" data-type="moral_lesson">
                         <span class="icon">&#128150;</span>
-                        <span class="label">Moral Lesson</span>
+                        <span class="label">{{ t.type_moral }}</span>
                     </div>
                 </div>
             </div>
 
             <form id="register-form" class="card-form">
                 <div class="form-group">
-                    <label for="card-species">Species / Instance</label>
+                    <label for="card-species">{{ t.label_species }}</label>
                     <select id="card-species" name="species" required>
-                        <option value="">Select a species...</option>
+                        <option value="">{{ t.select_placeholder }}</option>
                     </select>
-                    <small id="species-hint">Select the type of character</small>
+                    <small id="species-hint">{{ t.hint_species_char }}</small>
                 </div>
 
                 <div class="form-group" id="name-group">
-                    <label for="card-name">Name (used in story)</label>
-                    <input type="text" id="card-name" name="name" placeholder="e.g., Buddy, Princess Luna">
-                    <small>The name that will appear in the story</small>
+                    <label for="card-name">{{ t.label_name }}</label>
+                    <input type="text" id="card-name" name="name" placeholder="{{ t.placeholder_name }}">
+                    <small>{{ t.hint_name }}</small>
                 </div>
 
                 <div class="form-group" id="role-group">
-                    <label>Character Role</label>
+                    <label>{{ t.label_role }}</label>
                     <div class="role-selector">
-                        <div class="role-option selected" data-role="main">Main Character</div>
-                        <div class="role-option" data-role="secondary">Secondary</div>
-                        <div class="role-option" data-role="felon">Felon</div>
-                        <div class="role-option" data-role="evil">Evil/Villain</div>
+                        <div class="role-option selected" data-role="main">{{ t.role_main }}</div>
+                        <div class="role-option" data-role="secondary">{{ t.role_secondary }}</div>
+                        <div class="role-option" data-role="felon">{{ t.role_felon }}</div>
+                        <div class="role-option" data-role="evil">{{ t.role_evil }}</div>
                     </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary">
                     <span class="icon">&#128190;</span>
-                    Save Card
+                    {{ t.btn_save }}
                 </button>
             </form>
             <div id="form-message" class="form-message" style="display: none;"></div>
@@ -250,30 +291,30 @@
 
         <!-- Registered Cards List -->
         <section class="cards-section">
-            <h2>Registered Cards</h2>
+            <h2>{{ t.title_registered }}</h2>
             <div id="cards-list" class="cards-list">
-                <p class="loading">Loading cards...</p>
+                <p class="loading">{{ t.loading }}</p>
             </div>
         </section>
 
         <!-- Species Management -->
         <section class="species-section">
-            <h2>Manage Species</h2>
-            <p class="hint">Add custom characters, environments, or moral lessons</p>
+            <h2>{{ t.title_species }}</h2>
+            <p class="hint">{{ t.hint_manage_species }}</p>
 
             <div class="species-tabs">
-                <button class="species-tab character active" data-type="character">Characters</button>
-                <button class="species-tab environment" data-type="environment">Environments</button>
-                <button class="species-tab moral_lesson" data-type="moral_lesson">Moral Lessons</button>
+                <button class="species-tab character active" data-type="character">{{ t.tab_characters }}</button>
+                <button class="species-tab environment" data-type="environment">{{ t.tab_environments }}</button>
+                <button class="species-tab moral_lesson" data-type="moral_lesson">{{ t.tab_morals }}</button>
             </div>
 
             <div id="species-list" class="species-list">
-                <p class="loading">Loading species...</p>
+                <p class="loading">{{ t.loading }}</p>
             </div>
 
             <form class="add-species-form" id="add-species-form">
-                <input type="text" id="new-species" placeholder="Add new species...">
-                <button type="submit" class="btn btn-primary btn-small">Add</button>
+                <input type="text" id="new-species" placeholder="{{ t.placeholder_new_species }}">
+                <button type="submit" class="btn btn-primary btn-small">{{ t.btn_add }}</button>
             </form>
         </section>
     </div>
@@ -340,15 +381,15 @@
             if (type === 'character') {
                 nameGroup.style.display = 'block';
                 roleGroup.style.display = 'block';
-                speciesHint.textContent = 'Select the type of character';
+                speciesHint.textContent = '{{ t.hint_species_char }}';
             } else if (type === 'environment') {
                 nameGroup.style.display = 'block';
                 roleGroup.style.display = 'none';
-                speciesHint.textContent = 'Select the setting for the story';
+                speciesHint.textContent = '{{ t.hint_species_env }}';
             } else {
                 nameGroup.style.display = 'none';
                 roleGroup.style.display = 'none';
-                speciesHint.textContent = 'Select the moral lesson to teach';
+                speciesHint.textContent = '{{ t.hint_species_moral }}';
             }
         }
 
@@ -367,7 +408,7 @@
             const select = document.getElementById('card-species');
             const species = speciesData[type] || [];
 
-            select.innerHTML = '<option value="">Select a species...</option>';
+            select.innerHTML = '<option value="">{{ t.select_placeholder }}</option>';
             species.forEach(s => {
                 const option = document.createElement('option');
                 option.value = s;
@@ -381,7 +422,7 @@
             const species = speciesData[type] || [];
 
             if (species.length === 0) {
-                container.innerHTML = '<p class="no-cards">No species defined.</p>';
+                container.innerHTML = '<p class="no-cards">{{ t.no_species_defined }}</p>';
                 return;
             }
 
@@ -494,12 +535,12 @@
                 const cards = await response.json();
 
                 if (Object.keys(cards).length === 0) {
-                    container.innerHTML = '<p class="no-cards">No cards registered yet.</p>';
+                    container.innerHTML = '<p class="no-cards">{{ t.no_cards_registered }}</p>';
                     return;
                 }
 
                 let html = '<table class="cards-table"><thead><tr>';
-                html += '<th>UID</th><th>Type</th><th>Species</th><th>Name</th><th>Role</th><th>Actions</th>';
+                html += '<th>{{ t.table_uid }}</th><th>{{ t.table_type }}</th><th>{{ t.table_species }}</th><th>{{ t.table_name }}</th><th>{{ t.table_role }}</th><th>{{ t.table_actions }}</th>';
                 html += '</tr></thead><tbody>';
 
                 for (const [uid, info] of Object.entries(cards)) {
@@ -520,7 +561,7 @@
                         <td>${cardType === 'character' && role !== '-' ? `<span class="role-badge">${role}</span>` : '-'}</td>
                         <td>
                             <button class="btn btn-danger btn-small" onclick="deleteCard('${uid}')">
-                                Delete
+                                {{ t.btn_delete }}
                             </button>
                         </td>
                     </tr>`;
@@ -571,4 +612,5 @@
         window.deleteCard = deleteCard;
     </script>
 </body>
+
 </html>

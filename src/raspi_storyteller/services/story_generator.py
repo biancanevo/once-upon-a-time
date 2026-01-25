@@ -7,10 +7,7 @@ Provides streaming story generation with paragraph detection and TTS integration
 import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, AsyncGenerator, Dict, List, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass  # Add type hints here if needed
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from ..state import AudioSegment, Story
 from ..utils.logger import get_logger
@@ -33,103 +30,48 @@ class StoryGenerator:
     - Story caching
     """
 
-    # Story prompt templates with variable length support (legacy - animals only)
-    PROMPT_TEMPLATE_ES = """Eres un cuenta cuentos para niños. Genera una historia {length_description},
-divertida y educativa de {paragraph_range} sobre los siguientes animales: {animals}.
-La historia debe tener aproximadamente {word_target} palabras.
+    # Single Master Prompt Template
+    MASTER_PROMPT = """You are a master children's storyteller.
 
-La historia debe:
-- Ser apropiada para niños de 4-8 años
-- Tener una moraleja o enseñanza
-- Usar lenguaje simple y descriptivo
-- Incluir diálogos entre los personajes
+You need to generate a story based on the following elements:
 
-Escribe solo la historia, sin introducción ni comentarios adicionales."""
-
-    PROMPT_TEMPLATE_EN = """You are a children's storyteller. Generate a {length_description},
-fun, and educational story of {paragraph_range} about the following animals: {animals}.
-The story should be approximately {word_target} words.
-
-The story should:
-- Be appropriate for children ages 4-8
-- Have a moral or lesson
-- Use simple, descriptive language
-- Include dialogue between the characters
-
-Write only the story, without introduction or additional comments."""
-
-    PROMPT_TEMPLATE_IT = """Sei un narratore di storie per bambini. Genera una storia {length_description},
-divertente ed educativa di {paragraph_range} sui seguenti animali: {animals}.
-La storia deve avere circa {word_target} parole.
-
-La storia deve:
-- Essere appropriata per bambini di 4-8 anni
-- Avere una morale o un insegnamento
-- Usare un linguaggio semplice e descrittivo
-- Includere dialoghi tra i personaggi
-
-Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
-
-    # Enhanced prompt templates with characters, environment, and moral lesson
-    ENHANCED_PROMPT_ES = """Eres un cuenta cuentos para niños. Genera una historia {length_description},
-divertida y educativa de {paragraph_range}.
-La historia debe tener aproximadamente {word_target} palabras.
-
-PERSONAJES:
+STORY ELEMENTS:
+- CHARACTERS:
 {characters_description}
+- SETTING: {environment}
+- MORAL LESSON: {moral_lesson}
 
-AMBIENTACIÓN: La historia ocurre en {environment}.
+INSTRUCTIONS:
+1. TARGET AUDIENCE: Children ages 4-8. Use simple, descriptive language appropriate for this age.
+2. PLOT STRUCTURE:
+   - Beginning: Introduce the protagonists ({protagonists}) in the {environment}.
+   - Middle: Introduce a conflict involving the moral lesson ({moral_lesson}). If there are generic villains/felons ({antagonists}), use them to create obstacles.
+   - Climax: The protagonists overcome the challenge/villain using the moral lesson.
+   - Ending: A happy resolution where the lesson is clearly learned.
+3. CHARACTER ROLES:
+   - Main Protagonists: Drive the action and learn the lesson.
+   - Secondary Characters: Help the protagonists.
+   - Minor Villains/Felons: Create mischief or small obstacles.
+   - Evil Antagonists: Create major challenges (but keep it kid-friendly).
+4. FORMATTING:
+   - Write ONLY the story text.
+   - Do NOT include title, introduction, or "Here is the story".
+   - Use clear paragraphs.
+   - Include dialogue to bring characters to life.   
 
-MORALEJA: La historia debe enseñar sobre {moral_lesson}.
+VERY IMPORTANT: 
+- No harmful content.
+- Always keep in mind taht this is a story for kids up to 8 years old.
+- Use simple, descriptive language appropriate for this age.
+- You MUST generate the story in {target_language}.
+- DO NOT add additional characters not specified in the prompt.
+- The story should be {length_description}, approximately {word_target} words, divided into {paragraph_range} paragraphs.
+- Do not use symbols or special characters that cannot be pronounced.
+- ALWAYS KEEP IN MIND that the story will be read by an adult for a child.
+- DO NOT use complex or abstract concepts.
 
-La historia debe:
-- Ser apropiada para niños de 4-8 años
-- Desarrollar la moraleja de forma natural a través de las acciones de los personajes
-- Usar lenguaje simple y descriptivo
-- Incluir diálogos entre los personajes
-- Tener un final feliz que refuerce la enseñanza
+"""
 
-Escribe solo la historia, sin introducción ni comentarios adicionales."""
-
-    ENHANCED_PROMPT_EN = """You are a children's storyteller. Generate a {length_description},
-fun, and educational story of {paragraph_range}.
-The story should be approximately {word_target} words.
-
-CHARACTERS:
-{characters_description}
-
-SETTING: The story takes place in {environment}.
-
-MORAL LESSON: The story should teach about {moral_lesson}.
-
-The story should:
-- Be appropriate for children ages 4-8
-- Develop the moral naturally through the characters' actions
-- Use simple, descriptive language
-- Include dialogue between the characters
-- Have a happy ending that reinforces the lesson
-
-Write only the story, without introduction or additional comments."""
-
-    ENHANCED_PROMPT_IT = """Sei un narratore di storie per bambini. Genera una storia {length_description},
-divertente ed educativa di {paragraph_range}.
-La storia deve avere circa {word_target} parole.
-
-PERSONAGGI:
-{characters_description}
-
-AMBIENTAZIONE: La storia si svolge in {environment}.
-
-MORALE: La storia deve insegnare {moral_lesson}.
-
-La storia deve:
-- Essere appropriata per bambini di 4-8 anni
-- Sviluppare la morale in modo naturale attraverso le azioni dei personaggi
-- Usare un linguaggio semplice e descrittivo
-- Includere dialoghi tra i personaggi
-- Avere un finale felice che rafforzi l'insegnamento
-
-Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
 
     def __init__(
         self,
@@ -146,13 +88,13 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
             ollama_host: Ollama server URL.
             model: LLM model to use.
             timeout: Request timeout in seconds.
-            language: Story language ('es' or 'en').
+            language: Story language code (e.g., 'es', 'en', 'it').
             mock: If True, return mock stories for testing.
         """
         self.ollama_host = ollama_host
         self.model = model
         self.timeout = timeout
-        self.language = language
+        self.language = language.lower()
         self.mock = mock
         self._client = None
 
@@ -177,43 +119,26 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
             logger.error(f"Failed to initialize Ollama client: {e}")
             self.mock = True
 
+    def _get_language_name(self, code: str) -> str:
+        """Map language code to full name for the prompt."""
+        from ..i18n import get_language_name
+        return get_language_name(code)
+
     def _get_prompt(self, animals: List[str], story_minutes: int = 5) -> str:
         """
-        Generate prompt for the given animals and story length (legacy).
-
-        Args:
-            animals: List of animal names.
-            story_minutes: Target story duration in minutes (1-15).
-
-        Returns:
-            Formatted prompt string.
+        Legacy wrapper for prompt generation.
+        Converts old 'animals' list into character dicts and calls _get_enhanced_prompt.
         """
-        from ..hardware.length_slider import get_length_params
-
-        animals_str = ", ".join(animals) if animals else "a cat and a dog"
-        length_params = get_length_params(story_minutes)
-
-        if self.language == "es":
-            return self.PROMPT_TEMPLATE_ES.format(
-                animals=animals_str,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
-        elif self.language == "it":
-            return self.PROMPT_TEMPLATE_IT.format(
-                animals=animals_str,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
-        else:  # English is default
-            return self.PROMPT_TEMPLATE_EN.format(
-                animals=animals_str,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
+        characters = [
+            {"name": animal, "species": animal, "role": "main" if i == 0 else "secondary"}
+            for i, animal in enumerate(animals)
+        ]
+        return self._get_enhanced_prompt(
+            characters=characters,
+            environment="a magical place",
+            moral_lesson="friendship",
+            story_minutes=story_minutes
+        )
 
     def _get_enhanced_prompt(
         self,
@@ -223,81 +148,56 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
         story_minutes: int = 5,
     ) -> str:
         """
-        Generate enhanced prompt with characters, environment, and moral lesson.
-
-        Args:
-            characters: List of character dicts with name, species, and role.
-            environment: The story setting.
-            moral_lesson: The moral to teach.
-            story_minutes: Target story duration in minutes.
-
-        Returns:
-            Formatted prompt string.
+        Generate prompt using the single English Master Template.
         """
         from ..hardware.length_slider import get_length_params
 
         length_params = get_length_params(story_minutes)
+        target_language = self._get_language_name(self.language)
 
-        # Build character descriptions based on language
-        role_translations = {
-            "es": {
-                "main": "protagonista principal",
-                "secondary": "personaje secundario",
-                "felon": "villano menor",
-                "evil": "antagonista malvado",
-            },
-            "en": {
-                "main": "main protagonist",
-                "secondary": "secondary character",
-                "felon": "minor villain",
-                "evil": "evil antagonist",
-            },
-            "it": {
-                "main": "protagonista principale",
-                "secondary": "personaggio secondario",
-                "felon": "cattivo minore",
-                "evil": "antagonista malvagio",
-            },
-        }
+        # Process characters explicitly for the prompt instruction
+        char_descriptions = []
+        protagonists_list = []
+        antagonists_list = []
 
-        roles = role_translations.get(self.language, role_translations["en"])
-        char_lines = []
         for char in characters:
-            name = char.get("name", char.get("species", "character"))
-            species = char.get("species", "character")
-            role = char.get("role", "secondary")
-            role_desc = roles.get(role, roles["secondary"])
-            char_lines.append(f"- {name} (un/una {species}): {role_desc}")
+            name = char.get("name", "Unknown")
+            species = char.get("species", "Creature")
+            # Default to secondary if role missing
+            role_raw = char.get("role", "secondary") 
+            
+            # Map role to descriptive text
+            role_map = {
+                "main": "Main Protagonist",
+                "secondary": "Secondary Character",
+                "felon": "Minor Villain (Mischievous)",
+                "evil": "Antagonist (Opposing)",
+            }
+            role_desc = role_map.get(role_raw, "Character")
+            
+            char_descriptions.append(f"- {name} ({species}): {role_desc}")
 
-        characters_description = "\n".join(char_lines) if char_lines else "- Un personaje misterioso"
+            if role_raw in ["main", "secondary"]:
+                protagonists_list.append(name)
+            elif role_raw in ["felon", "evil"]:
+                antagonists_list.append(name)
 
-        if self.language == "es":
-            return self.ENHANCED_PROMPT_ES.format(
-                characters_description=characters_description,
-                environment=environment,
-                moral_lesson=moral_lesson,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
-        elif self.language == "it":
-            return self.ENHANCED_PROMPT_IT.format(
-                characters_description=characters_description,
-                environment=environment,
-                moral_lesson=moral_lesson,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
-        else:  # English is default
-            return self.ENHANCED_PROMPT_EN.format(
-                characters_description=characters_description,
-                environment=environment,
-                moral_lesson=moral_lesson,
-                length_description=length_params["length_description"],
-                paragraph_range=length_params["paragraph_range"],
-                word_target=length_params["word_target"],
-            )
+        # Fallbacks for empty lists
+        chars_text = "\n".join(char_descriptions) if char_descriptions else "- A mysterious friend"
+        protagonists_text = ", ".join(protagonists_list) if protagonists_list else "the main characters"
+        antagonists_text = ", ".join(antagonists_list) if antagonists_list else "any challenges"
+
+        return self.MASTER_PROMPT.format(
+            target_language=target_language,
+            length_description=length_params["length_description"],
+            word_target=length_params["word_target"],
+            paragraph_range=length_params["paragraph_range"],
+            characters_description=chars_text,
+            environment=environment,
+            moral_lesson=moral_lesson,
+            protagonists=protagonists_text,
+            antagonists=antagonists_text,
+        )
 
     def _get_mock_story(self, animals: List[str], story_minutes: int = 5) -> str:
         """
@@ -310,10 +210,7 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
         Returns:
             Mock story text.
         """
-        from ..hardware.length_slider import get_length_params
-
         animals_str = ", ".join(animals) if animals else "un gato y un perro"
-        length_params = get_length_params(story_minutes)
 
         # Base story paragraphs for different languages
         if self.language == "es":
@@ -460,46 +357,6 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
         except Exception as e:
             logger.error(f"Ollama generation failed: {e}")
             raise
-
-    async def generate_story_stream(
-        self, animals: List[str], story_minutes: int = 5
-    ) -> AsyncGenerator[str, None]:
-        """
-        Generate story with streaming output.
-
-        Args:
-            animals: List of animal names.
-            story_minutes: Target story duration in minutes (1-15).
-
-        Yields:
-            Story text chunks as they're generated.
-        """
-        from ..hardware.length_slider import get_length_params
-
-        if self.mock:
-            story = self._get_mock_story(animals, story_minutes)
-            for word in story.split():
-                yield word + " "
-                await asyncio.sleep(0.02)
-            return
-
-        prompt = self._get_prompt(animals, story_minutes)
-        length_params = get_length_params(story_minutes)
-
-        try:
-            for chunk in self._client.generate(
-                model=self.model,
-                prompt=prompt,
-                stream=True,
-                options={"temperature": 0.8, "num_predict": length_params["token_limit"]},
-            ):
-                if "response" in chunk:
-                    yield chunk["response"]
-        except Exception as e:
-            logger.error(f"Streaming generation failed: {e}")
-            # Yield mock story as fallback
-            story = self._get_mock_story(animals, story_minutes)
-            yield story
 
     async def generate_story_with_audio(
         self,
@@ -713,15 +570,5 @@ Scrivi solo la storia, senza introduzione o commenti aggiuntivi."""
         Args:
             language: Language code ('es' or 'en').
         """
-        self.language = language
-        logger.info(f"Language changed to: {language}")
-
-    def set_model(self, model: str) -> None:
-        """
-        Change the LLM model.
-
-        Args:
-            model: Model name (e.g., 'gemma3:1b', 'llama2').
-        """
-        self.model = model
-        logger.info(f"Model changed to: {model}")
+        self.language = language.lower()
+        logger.info(f"Language changed to: {self.language}")

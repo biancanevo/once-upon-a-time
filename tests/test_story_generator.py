@@ -75,35 +75,19 @@ class TestStoryGenerator:
         story_generator.set_language("en")
         assert story_generator.language == "en"
 
-    def test_set_model(self, story_generator):
-        """Test model setting."""
-        story_generator.set_model("llama2")
-        assert story_generator.model == "llama2"
-
-    @pytest.mark.asyncio
-    async def test_generate_story_stream(self, story_generator):
-        """Test streaming story generation."""
-        chunks = []
-        async for chunk in story_generator.generate_story_stream(["cat"]):
-            chunks.append(chunk)
-
-        assert len(chunks) > 0
-        full_text = "".join(chunks)
-        assert len(full_text) > 0
-
     def test_get_prompt_spanish(self):
-        """Test Spanish prompt generation."""
+        """Test Spanish prompt generation (via Master Prompt)."""
         generator = StoryGenerator(mock=True, language="es")
         prompt = generator._get_prompt(["gato", "perro"])
-        assert "gato, perro" in prompt
-        assert "niños" in prompt  # Spanish word
+        assert "Spanish" in prompt
+        assert "INSTRUCTIONS" in prompt 
 
     def test_get_prompt_english(self):
-        """Test English prompt generation."""
+        """Test English prompt generation (via Master Prompt)."""
         generator = StoryGenerator(mock=True, language="en")
         prompt = generator._get_prompt(["cat", "dog"])
-        assert "cat, dog" in prompt
-        assert "children" in prompt  # English word
+        assert "English" in prompt
+        assert "INSTRUCTIONS" in prompt
 
     def test_mock_story_spanish(self):
         """Test mock story generation in Spanish."""

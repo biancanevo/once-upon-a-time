@@ -173,9 +173,9 @@ class TestAudioCache:
 
         cache = AudioCache(cache_dir=temp_cache_dir, max_size_mb=100)
 
-        # Create some files
+        # Create some files (write enough data to show up in MB stats)
         for i in range(5):
-            (Path(temp_cache_dir) / f"test_{i}.mp3").write_bytes(b"x" * 1000)
+            (Path(temp_cache_dir) / f"test_{i}.mp3").write_bytes(b"x" * 1024 * 50)  # 50KB each
 
         stats = cache.get_stats()
         assert stats["file_count"] == 5

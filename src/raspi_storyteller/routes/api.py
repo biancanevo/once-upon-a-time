@@ -284,6 +284,14 @@ def set_voice_language():
             return jsonify({"error": "Language code required"}), 400
 
         current_app.speech_recognizer.set_language(language)
+        # Also update story generator language to ensure consistency
+        if hasattr(current_app, 'story_generator'):
+            # Convert locale (es-ES) to lang code (es) or pass as is if generator handles it
+            # The generator now expects 'es', 'en', 'it', etc. or handles logic internally.
+            # Let's pass the simple code if possible, or full if generator is robust.
+            # Our refactored generator takes the full code and parses it in _get_language_name
+            current_app.story_generator.set_language(language)
+            
         return jsonify({"status": "success", "language": language})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -692,57 +700,6 @@ def update_card_role(uid):
             }), 404
     except Exception as e:
         logger.error(f"API error in update_card_role: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-# Animal management endpoints
-
-@api_bp.route("/animals", methods=["GET"])
-def get_selected_animals():
-    """Get currently selected animals."""
-    try:
-        state = current_app.state
-        return jsonify({"animals": state.selected_animals})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/animals", methods=["POST"])
-def add_animal():
-    """Add an animal to the selection."""
-    try:
-        data = request.get_json() or {}
-        animal = data.get("animal")
-
-        if not animal:
-            return jsonify({"error": "Animal name required"}), 400
-
-        state = current_app.state
-        state.add_animal(animal)
-        return jsonify({"status": "added", "animals": state.selected_animals})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/animals/<animal>", methods=["DELETE"])
-def remove_animal(animal):
-    """Remove an animal from the selection."""
-    try:
-        state = current_app.state
-        state.remove_animal(animal)
-        return jsonify({"status": "removed", "animals": state.selected_animals})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/animals/clear", methods=["POST"])
-def clear_animals():
-    """Clear all selected animals."""
-    try:
-        state = current_app.state
-        state.clear_animals()
-        return jsonify({"status": "cleared", "animals": []})
-    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 

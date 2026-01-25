@@ -57,7 +57,9 @@ class Config:
 
     # TTS settings
     TTS_PROVIDER = os.getenv("TTS_PROVIDER", "pyttsx3")
-    EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "es-ES-PabloNeural")
+    EDGE_TTS_VOICE_ES = os.getenv("EDGE_TTS_VOICE_ES", "es-ES-AlvaroNeural")
+    EDGE_TTS_VOICE_IT = os.getenv("EDGE_TTS_VOICE_IT", "it-IT-DiegoNeural")
+    EDGE_TTS_VOICE_EN = os.getenv("EDGE_TTS_VOICE_EN", "en-US-GuyNeural")
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
     # Audio settings
@@ -69,6 +71,7 @@ class Config:
     SPEECH_TIMEOUT = int(os.getenv("SPEECH_TIMEOUT", "5"))
 
     # Hardware settings
+    # Default to True for safety, can be overridden by .env
     MOCK_HARDWARE = os.getenv("MOCK_HARDWARE", "True").lower() in ("true", "1", "yes")
     MOCK_OLLAMA = os.getenv("MOCK_OLLAMA", "False").lower() in ("true", "1", "yes")
 
@@ -97,21 +100,35 @@ class Config:
         cls.AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         Path(cls.LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
 
+    @classmethod
+    def get_edge_voice_for_language(cls) -> str:
+        """Get appropriate Edge TTS voice based on SPEECH_LANGUAGE."""
+        # Extract language prefix (es-ES -> es, en-US -> en)
+        lang_prefix = cls.SPEECH_LANGUAGE.split("-")[0].lower()
+
+        # Map to language-specific voice env var
+        voice_map = {
+            "es": cls.EDGE_TTS_VOICE_ES,
+            "it": cls.EDGE_TTS_VOICE_IT,
+            "en": cls.EDGE_TTS_VOICE_EN,
+        }
+
+        # Return matched voice or default to Spanish
+        return voice_map.get(lang_prefix, "es-ES-AlvaroNeural")
+
 
 class DevelopmentConfig(Config):
     """Development-specific configuration."""
-
-    DEBUG = True
-    MOCK_HARDWARE = True
-    # TTS_PROVIDER inherited from Config (respects .env)
+    # Inherits everything from Config, relying on .env
+    pass
 
 
 class ProductionConfig(Config):
     """Production configuration for Raspberry Pi deployment."""
-
-    DEBUG = False
-    MOCK_HARDWARE = False
-    # TTS_PROVIDER inherited from Config (respects .env)
+    # In production, we might want to enforce certain defaults if not set in env
+    # but generally respecting env vars is better.
+    # We force DEBUG to False unless explicitly overridden to True (safety)
+    DEBUG = os.getenv("FLASK_DEBUG", "False").lower() in ("true", "1", "yes")
 
 
 class TestingConfig(Config):

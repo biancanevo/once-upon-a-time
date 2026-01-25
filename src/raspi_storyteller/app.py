@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Flask
 from flask_cors import CORS
 
-from .config import get_config, Config
+from .config import get_config
 from .state import StorytellerState
 from .services.tts_engine import TTSEngine
 from .services.audio_manager import AudioManager
@@ -75,7 +75,7 @@ def create_app(config_class=None):
         provider=config_class.TTS_PROVIDER,
         cache_dir=str(config_class.AUDIO_CACHE_DIR),
         max_cache_size_mb=config_class.MAX_CACHE_SIZE_MB,
-        voice=config_class.EDGE_TTS_VOICE,
+        voice=config_class.get_edge_voice_for_language(),
         language=config_class.SPEECH_LANGUAGE,
     )
     logger.info(f"TTSEngine initialized with provider: {config_class.TTS_PROVIDER}, language: {config_class.SPEECH_LANGUAGE}")
@@ -94,7 +94,7 @@ def create_app(config_class=None):
 
     # Story Generator
     # Extract short language code (e.g., 'it' from 'it-IT' or 'it')
-    story_language = config_class.SPEECH_LANGUAGE.split("-")[0] if config_class.SPEECH_LANGUAGE else "es"
+    story_language = config_class.SPEECH_LANGUAGE.split("-")[0].lower() if config_class.SPEECH_LANGUAGE else "es"
     app.story_generator = StoryGenerator(
         ollama_host=config_class.OLLAMA_HOST,
         model=config_class.OLLAMA_MODEL,
@@ -145,19 +145,25 @@ def create_app(config_class=None):
             logger.debug(f"Card {uid} debounced")
             return
 
-        # Look up animal for this card
-        animal = app.state.get_animal_for_card(uid)
-        if animal:
-            logger.info(f"Card {uid} mapped to animal: {animal}")
-            app.state.add_animal(animal)
+        # Try to find the card in the database
+        card = app.state.get_card(uid)
+        
+        if card:
+            logger.info(f"Known card detected: {card.uid} ({card.card_type.value}: {card.species})")
+            app.state.add_selected_card(card)
             # Trigger success animation for visual feedback
             if app.led_animator:
                 app.led_animator.animate_success(duration=0.5)
-        else:
-            logger.warning(f"Unknown card: {uid}")
-            # Trigger error animation for unknown cards
-            if app.led_animator:
-                app.led_animator.animate_error(duration=0.5)
+            return
+
+        # If not a known card object, check legacy mapping or treat as unknown
+        # Note: app.state.get_card should handle legacy cards if they are in the DB
+        # So we only reach here if the UID is essentially unknown to the internal DB
+        
+        logger.warning(f"Unknown card: {uid}")
+        # Trigger error animation for unknown cards
+        if app.led_animator:
+            app.led_animator.animate_error(duration=0.5)
 
     app.rfid_polling = RFIDPollingLoop(
         handler=rfid_handler,

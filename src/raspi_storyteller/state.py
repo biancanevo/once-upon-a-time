@@ -282,36 +282,18 @@ class StorytellerState:
     # Animal management (legacy compatibility)
     @property
     def selected_animals(self) -> List[str]:
-        """Get the list of currently selected animals (legacy compatibility)."""
+        """
+        Get the list of currently selected animals (legacy compatibility).
+        
+        Reflected from selected character cards.
+        """
         with self._lock:
-            # Return names from selected character cards, fallback to legacy list
-            if self._selected_cards:
-                return [
-                    sc.card.name or sc.card.species
-                    for sc in self._selected_cards
-                    if sc.card.card_type == CardType.CHARACTER
-                ]
-            return self._selected_animals.copy()
-
-    def add_animal(self, animal: str) -> None:
-        """Add an animal to the selection (legacy compatibility)."""
-        with self._lock:
-            if animal and animal not in self._selected_animals:
-                self._selected_animals.append(animal)
-                logger.info(f"Added animal: {animal}")
-
-    def remove_animal(self, animal: str) -> None:
-        """Remove an animal from the selection (legacy compatibility)."""
-        with self._lock:
-            if animal in self._selected_animals:
-                self._selected_animals.remove(animal)
-                logger.info(f"Removed animal: {animal}")
-
-    def clear_animals(self) -> None:
-        """Clear all selected animals (legacy compatibility)."""
-        with self._lock:
-            self._selected_animals.clear()
-            logger.info("Cleared all animals")
+            # Return names from selected character cards
+            return [
+                sc.card.name or sc.card.species
+                for sc in self._selected_cards
+                if sc.card.card_type == CardType.CHARACTER
+            ]
 
     # Selected cards management
     @property
@@ -328,16 +310,21 @@ class StorytellerState:
                 if sc.card.uid == card.uid:
                     return  # Already selected
 
-            # For first character, default to main role
+            # Use the card's defined role if available and no override provided
             if card.card_type == CardType.CHARACTER:
                 if role is None:
-                    # First character is main, others are secondary
-                    has_main = any(
-                        (sc.role or sc.card.role) == CharacterRole.MAIN
-                        for sc in self._selected_cards
-                        if sc.card.card_type == CardType.CHARACTER
-                    )
-                    role = CharacterRole.SECONDARY if has_main else CharacterRole.MAIN
+                    # Respect the card's persistent role
+                    if card.role:
+                        role = card.role
+                    else:
+                        # Fallback for cards without a role (legacy or incomplete data)
+                        # Default to Secondary unless it's the very first character
+                        has_main = any(
+                            (sc.role or sc.card.role) == CharacterRole.MAIN
+                            for sc in self._selected_cards
+                            if sc.card.card_type == CardType.CHARACTER
+                        )
+                        role = CharacterRole.SECONDARY if has_main else CharacterRole.MAIN
 
             self._selected_cards.append(SelectedCard(card=card, role=role))
             # Also add to legacy animals list for backwards compatibility
@@ -580,25 +567,6 @@ class StorytellerState:
             data = self._cards_db.get(uid)
             if data:
                 return Card.from_dict(uid, data)
-            return None
-
-    def get_animal_for_card(self, uid: str) -> Optional[str]:
-        """
-        Get the animal/name associated with an RFID card (legacy compatibility).
-
-        Args:
-            uid: The RFID card UID.
-
-        Returns:
-            The animal name or None if not found.
-        """
-        with self._lock:
-            data = self._cards_db.get(uid)
-            if data:
-                # Handle both new and legacy format
-                if "animal" in data:
-                    return data["animal"]
-                return data.get("name") or data.get("species")
             return None
 
     def get_card_type(self, uid: str) -> Optional[CardType]:
