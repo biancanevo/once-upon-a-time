@@ -7,6 +7,7 @@
 - RC522 RFID reader module
 - NeoPixel/WS2812 LED ring (12 LEDs)
 - Speaker (3.5mm jack or USB)
+- (Optional) MCP3008 ADC + 10K potentiometer for story length control
 - (Optional) HAT microphone for voice commands
 - RFID cards/tags
 
@@ -31,6 +32,35 @@
 | DIN | GPIO 18 (PWM0) |
 | VCC | 5V |
 | GND | Ground |
+
+### MCP3008 ADC (for Story Length Potentiometer)
+
+The story length slider uses an MCP3008 ADC to read a potentiometer value.
+
+**MCP3008 Wiring:**
+
+| MCP3008 Pin | Raspberry Pi Pin |
+|-------------|-----------------|
+| VDD (16) | 3.3V |
+| VREF (15) | 3.3V |
+| AGND (14) | Ground |
+| CLK (13) | GPIO 11 (SCLK) |
+| DOUT (12) | GPIO 9 (MISO) |
+| DIN (11) | GPIO 10 (MOSI) |
+| CS/SHDN (10) | GPIO 7 (CE1) |
+| DGND (9) | Ground |
+
+**Note:** The MCP3008 uses CE1 (GPIO 7) to avoid conflict with the RC522 RFID reader which uses CE0 (GPIO 8).
+
+**Potentiometer (10K ohm) Wiring:**
+
+| Potentiometer Pin | Connection |
+|-------------------|------------|
+| Left terminal | Ground |
+| Center (wiper) | MCP3008 CH0 (pin 1) |
+| Right terminal | 3.3V |
+
+This allows the potentiometer to control story duration from 1-15 minutes.
 
 ## Software Installation
 
@@ -237,6 +267,45 @@ sudo /home/pi/once-upon-a-time/venv/bin/raspi-storyteller
 # Or add user to gpio group
 sudo usermod -a -G gpio $USER
 ```
+
+### Potentiometer/Slider Not Working
+
+```bash
+# Check SPI is enabled
+ls /dev/spidev*
+# Should show: /dev/spidev0.0, /dev/spidev0.1
+
+# Test MCP3008 connection with Python
+python3 << 'EOF'
+import spidev
+
+spi = spidev.SpiDev()
+spi.open(0, 1)  # CE1
+spi.max_speed_hz = 1350000
+
+def read_adc(channel):
+    cmd = [1, (8 + channel) << 4, 0]
+    response = spi.xfer2(cmd)
+    value = ((response[1] & 3) << 8) + response[2]
+    return value
+
+# Read channel 0 (potentiometer)
+for i in range(5):
+    val = read_adc(0)
+    print(f"ADC Value: {val} ({val/1023*100:.1f}%)")
+    import time; time.sleep(0.5)
+
+spi.close()
+EOF
+
+# If values change when turning potentiometer, wiring is correct
+```
+
+If the slider isn't responding:
+1. Check all MCP3008 wiring connections
+2. Ensure SPI is enabled in `raspi-config`
+3. Verify the potentiometer center pin is connected to CH0
+4. Check that you're using CE1 (GPIO 7), not CE0 (used by RFID)
 
 ### Service Won't Start
 

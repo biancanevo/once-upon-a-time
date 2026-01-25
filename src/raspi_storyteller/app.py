@@ -20,6 +20,7 @@ from .services.story_generator import StoryGenerator
 from .hardware.rfid_handler import get_rfid_handler, RFIDPollingLoop
 from .hardware.led_controller import get_led_controller, LEDAnimator
 from .hardware.audio_device import AudioDeviceManager
+from .hardware.length_slider import get_slider_controller
 from .routes.api import api_bp
 from .routes.web import web_bp
 from .utils.logger import setup_logger, get_logger
@@ -118,6 +119,19 @@ def create_app(config_class=None):
     app.led_animator = LEDAnimator(led_controller)
     logger.info("LEDController initialized")
 
+    # Slider Controller for story length
+    slider_controller = get_slider_controller(
+        mock=mock_mode,
+        spi_bus=config_class.SLIDER_SPI_BUS,
+        spi_device=config_class.SLIDER_SPI_DEVICE,
+        adc_channel=config_class.SLIDER_ADC_CHANNEL,
+    )
+    app.slider_controller = slider_controller
+    # Set initial story length from slider or default
+    initial_minutes = slider_controller.get_minutes()
+    app.state.set_story_length(initial_minutes)
+    logger.info(f"SliderController initialized (initial length: {initial_minutes} min)")
+
     # RFID Handler and Polling Loop
     rfid_handler = get_rfid_handler(mock=mock_mode)
     app.rfid_handler = rfid_handler
@@ -201,6 +215,8 @@ def cleanup_app(app):
             app.led_animator.stop()
         if hasattr(app, "led_controller"):
             app.led_controller.cleanup()
+        if hasattr(app, "slider_controller"):
+            app.slider_controller.cleanup()
         if hasattr(app, "audio_manager"):
             app.audio_manager.cleanup()
         if hasattr(app, "rfid_handler"):

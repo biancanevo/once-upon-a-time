@@ -5,11 +5,172 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Storyteller - Cuenta Cuentos</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Card type colors */
+        .card-chip.character { border-left: 3px solid var(--success-color); }
+        .card-chip.environment { border-left: 3px solid #3b82f6; }
+        .card-chip.moral_lesson { border-left: 3px solid #a855f7; }
+
+        .card-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin: 0.25rem;
+        }
+
+        .card-chip .type-icon {
+            font-size: 1.2rem;
+        }
+
+        .card-chip .name {
+            font-weight: 500;
+        }
+
+        .card-chip .role {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .card-chip .remove {
+            cursor: pointer;
+            opacity: 0.6;
+            margin-left: 0.25rem;
+        }
+
+        .card-chip .remove:hover {
+            opacity: 1;
+            color: var(--error-color);
+        }
+
+        /* Cards by type sections */
+        .cards-by-type {
+            margin-bottom: 1rem;
+        }
+
+        .cards-type-section {
+            margin-bottom: 0.75rem;
+        }
+
+        .cards-type-section h4 {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cards-type-section h4 .indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .cards-type-section h4 .indicator.character { background: var(--success-color); }
+        .cards-type-section h4 .indicator.environment { background: #3b82f6; }
+        .cards-type-section h4 .indicator.moral_lesson { background: #a855f7; }
+
+        /* Role selector modal */
+        .role-selector-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .role-selector-overlay.active {
+            display: flex;
+        }
+
+        .role-selector-modal {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            max-width: 300px;
+            width: 90%;
+        }
+
+        .role-selector-modal h3 {
+            margin-bottom: 1rem;
+        }
+
+        .role-option {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            text-align: left;
+            transition: var(--transition);
+        }
+
+        .role-option:hover {
+            border-color: var(--success-color);
+            background: rgba(34, 197, 94, 0.15);
+        }
+
+        /* Story elements preview */
+        .story-elements-preview {
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .story-elements-preview h4 {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .story-elements-preview .element {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .story-elements-preview .element .label {
+            color: var(--secondary-color);
+            width: 100px;
+        }
+
+        /* Warning message */
+        .warning-message {
+            padding: 0.75rem 1rem;
+            background: rgba(245, 158, 11, 0.15);
+            border-left: 3px solid var(--warning-color);
+            border-radius: 4px;
+            color: var(--warning-color);
+            margin-bottom: 1rem;
+        }
+
+        /* RFID buttons with type colors */
+        .rfid-btn.character { border-left: 3px solid var(--success-color); }
+        .rfid-btn.environment { border-left: 3px solid #3b82f6; }
+        .rfid-btn.moral_lesson { border-left: 3px solid #a855f7; }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🎭 Cuenta Cuentos</h1>
+            <h1>Cuenta Cuentos</h1>
             <p class="subtitle">AI-powered Storyteller</p>
         </header>
 
@@ -42,19 +203,56 @@
             <!-- RFID Simulation -->
             <div class="rfid-simulation">
                 <h3>RFID Cards</h3>
-                <p class="hint">Click an animal to simulate tapping an RFID card</p>
+                <p class="hint">Click a card to simulate tapping an RFID card</p>
                 <div class="rfid-buttons" id="rfid-buttons">
                     <p class="loading">Loading registered cards...</p>
                 </div>
             </div>
+
+            <!-- Story Length Slider -->
+            <div class="story-length-container">
+                <h3>Story Length</h3>
+                <p class="hint">Adjust the slider to control story duration</p>
+                <div class="story-length-slider">
+                    <input type="range" id="story-length-slider" min="1" max="15" value="5" step="1">
+                    <div class="story-length-value">
+                        <span id="story-length-minutes">5</span> minutes
+                        <span id="story-length-description" class="length-description">(short)</span>
+                    </div>
+                </div>
+                <div class="story-length-labels">
+                    <span>1 min</span>
+                    <span>15 min</span>
+                </div>
+            </div>
         </section>
 
-        <!-- Selected Animals -->
+        <!-- Selected Cards -->
         <section class="animals-section">
-            <h2>Selected Animals</h2>
-            <div id="selected-animals" class="animal-chips">
-                <p class="no-animals">No animals selected yet. Tap an RFID card or use voice command.</p>
+            <h2>Selected Cards</h2>
+
+            <!-- Warning if no character -->
+            <div id="no-character-warning" class="warning-message" style="display: none;">
+                At least one character card is required to generate a story.
             </div>
+
+            <div id="selected-cards" class="cards-by-type">
+                <p class="no-animals">No cards selected yet. Tap an RFID card or use voice command.</p>
+            </div>
+
+            <!-- Story Elements Preview -->
+            <div id="story-elements-preview" class="story-elements-preview" style="display: none;">
+                <h4>Story Elements</h4>
+                <div class="element">
+                    <span class="label">Environment:</span>
+                    <span id="preview-environment">-</span>
+                </div>
+                <div class="element">
+                    <span class="label">Moral Lesson:</span>
+                    <span id="preview-moral">-</span>
+                </div>
+            </div>
+
             <div class="animal-actions">
                 <button id="clear-animals-btn" class="btn btn-secondary" disabled>Clear All</button>
             </div>
@@ -63,11 +261,11 @@
         <!-- Control Buttons -->
         <section class="controls-section">
             <button id="generate-btn" class="btn btn-primary btn-large">
-                <span class="icon">📖</span>
+                <span class="icon">&#128214;</span>
                 Generate Story
             </button>
             <button id="voice-btn" class="btn btn-secondary btn-large">
-                <span class="icon">🎤</span>
+                <span class="icon">&#127908;</span>
                 Voice Command
             </button>
         </section>
@@ -82,11 +280,11 @@
                 <h3>Audio Playback</h3>
                 <div id="audio-controls" class="audio-controls">
                     <button id="play-btn" class="btn btn-primary" disabled>
-                        <span class="icon">▶️</span>
+                        <span class="icon">&#9654;&#65039;</span>
                         Play Story
                     </button>
                     <button id="stop-btn" class="btn btn-secondary" disabled>
-                        <span class="icon">⏹️</span>
+                        <span class="icon">&#9209;&#65039;</span>
                         Stop
                     </button>
                     <div class="volume-control">
@@ -100,6 +298,19 @@
                 <audio id="audio-player" style="display: none;"></audio>
             </div>
         </section>
+
+        <!-- Role Selector Modal -->
+        <div id="role-selector-overlay" class="role-selector-overlay">
+            <div class="role-selector-modal">
+                <h3>Select Character Role</h3>
+                <p id="role-selector-character">-</p>
+                <button class="role-option" data-role="main">Main Character</button>
+                <button class="role-option" data-role="secondary">Secondary Character</button>
+                <button class="role-option" data-role="felon">Felon (Minor Villain)</button>
+                <button class="role-option" data-role="evil">Evil/Antagonist</button>
+                <button class="btn btn-secondary" id="role-cancel-btn" style="width: 100%; margin-top: 0.5rem;">Cancel</button>
+            </div>
+        </div>
 
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay" style="display: none;">

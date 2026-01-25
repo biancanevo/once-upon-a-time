@@ -88,14 +88,16 @@ class TestStorytellerState:
         assert state.is_playing is False
 
     def test_register_card(self, state):
-        """Test RFID card registration."""
-        state.register_card("123456", "cat")
+        """Test RFID card registration (legacy)."""
+        state.register_card_legacy("123456", "cat")
         assert "123456" in state.cards_db
-        assert state.cards_db["123456"]["animal"] == "cat"
+        # Legacy format should have name/species
+        card_data = state.cards_db["123456"]
+        assert card_data.get("species") == "cat" or card_data.get("animal") == "cat"
 
     def test_unregister_card(self, state):
         """Test RFID card unregistration."""
-        state.register_card("123456", "cat")
+        state.register_card_legacy("123456", "cat")
         result = state.unregister_card("123456")
         assert result is True
         assert "123456" not in state.cards_db
@@ -107,7 +109,7 @@ class TestStorytellerState:
 
     def test_get_animal_for_card(self, state):
         """Test getting animal for a card."""
-        state.register_card("123456", "cat")
+        state.register_card_legacy("123456", "cat")
         animal = state.get_animal_for_card("123456")
         assert animal == "cat"
 
@@ -119,12 +121,14 @@ class TestStorytellerState:
     def test_cards_db_persistence(self, temp_cards_db):
         """Test that cards database is persisted to file."""
         state = StorytellerState(cards_db_path=temp_cards_db)
-        state.register_card("123456", "cat")
+        state.register_card_legacy("123456", "cat")
 
         # Create new state instance and verify data is loaded
         state2 = StorytellerState(cards_db_path=temp_cards_db)
         assert "123456" in state2.cards_db
-        assert state2.cards_db["123456"]["animal"] == "cat"
+        # Check for either new or legacy format
+        card_data = state2.cards_db["123456"]
+        assert card_data.get("species") == "cat" or card_data.get("animal") == "cat"
 
     def test_should_process_card_debounce(self, state):
         """Test RFID card debounce logic."""

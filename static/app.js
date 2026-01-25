@@ -1,18 +1,23 @@
 /**
  * AI Storyteller - Main JavaScript Application
- * Handles story generation, audio playback, and UI updates
+ * Handles story generation, audio playback, and UI updates with card types
  */
 
 const API_BASE = '/api';
 
 // State management
 const state = {
-    selectedAnimals: [],
+    selectedAnimals: [],  // Legacy compatibility
+    selectedCards: [],
+    hasCharacter: false,
+    storyElements: null,
     currentStory: null,
     audioSegments: [],
     currentSegmentIndex: 0,
     isGenerating: false,
-    isPlaying: false
+    isPlaying: false,
+    storyLengthMinutes: 5,
+    registeredCards: {}
 };
 
 // DOM Elements (will be initialized after DOM loads)
@@ -22,7 +27,11 @@ let elements = {};
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize DOM elements after DOM is ready
     elements = {
-        selectedAnimals: document.getElementById('selected-animals'),
+        selectedCards: document.getElementById('selected-cards'),
+        noCharacterWarning: document.getElementById('no-character-warning'),
+        storyElementsPreview: document.getElementById('story-elements-preview'),
+        previewEnvironment: document.getElementById('preview-environment'),
+        previewMoral: document.getElementById('preview-moral'),
         clearAnimalsBtn: document.getElementById('clear-animals-btn'),
         generateBtn: document.getElementById('generate-btn'),
         voiceBtn: document.getElementById('voice-btn'),
@@ -39,17 +48,26 @@ document.addEventListener('DOMContentLoaded', () => {
         statusIndicator: document.getElementById('status-indicator'),
         statusText: document.getElementById('status-text'),
         ledRing: document.getElementById('led-ring'),
-        rfidButtons: document.getElementById('rfid-buttons')
+        rfidButtons: document.getElementById('rfid-buttons'),
+        storyLengthSlider: document.getElementById('story-length-slider'),
+        storyLengthMinutes: document.getElementById('story-length-minutes'),
+        storyLengthDescription: document.getElementById('story-length-description'),
+        roleSelectorOverlay: document.getElementById('role-selector-overlay'),
+        roleSelectorCharacter: document.getElementById('role-selector-character'),
+        roleCancelBtn: document.getElementById('role-cancel-btn')
     };
 
     setupEventListeners();
     initializeLEDRing();
     loadRegisteredCards();
     loadCurrentState();
+    loadSliderState();
     // Poll for state updates (for RFID card detection)
     setInterval(loadCurrentState, 2000);
     // Poll for LED state updates
     setInterval(updateLEDRing, 200);
+    // Poll for slider state updates (less frequent)
+    setInterval(loadSliderState, 1000);
 });
 
 function setupEventListeners() {
@@ -59,8 +77,8 @@ function setupEventListeners() {
     // Voice command button
     elements.voiceBtn.addEventListener('click', listenForVoice);
 
-    // Clear animals button
-    elements.clearAnimalsBtn.addEventListener('click', clearAnimals);
+    // Clear cards button
+    elements.clearAnimalsBtn.addEventListener('click', clearCards);
 
     // Audio controls
     elements.playBtn.addEventListener('click', playStory);
@@ -75,14 +93,70 @@ function setupEventListeners() {
     elements.audioPlayer.addEventListener('ended', onSegmentEnded);
     elements.audioPlayer.addEventListener('error', onAudioError);
 
-    // RFID simulation buttons will be set up dynamically
-    // See loadRegisteredCards() function
+    // Story length slider
+    if (elements.storyLengthSlider) {
+        elements.storyLengthSlider.addEventListener('input', onStoryLengthChange);
+        elements.storyLengthSlider.addEventListener('change', onStoryLengthCommit);
+    }
+
+    // Role selector modal
+    if (elements.roleCancelBtn) {
+        elements.roleCancelBtn.addEventListener('click', closeRoleSelector);
+    }
+
+    if (elements.roleSelectorOverlay) {
+        elements.roleSelectorOverlay.addEventListener('click', (e) => {
+            if (e.target === elements.roleSelectorOverlay) {
+                closeRoleSelector();
+            }
+        });
+    }
+
+    // Role selector buttons (will be set up dynamically)
+}
+
+// Card type icons and emojis
+function getCardTypeIcon(cardType) {
+    const icons = {
+        character: '🧑',
+        environment: '🏞️',
+        moral_lesson: '💖'
+    };
+    return icons[cardType] || '📇';
+}
+
+function getSpeciesEmoji(species, cardType) {
+    if (cardType === 'character') {
+        const emojis = {
+            cat: '🐱', dog: '🐶', 'little boy': '👦', 'little girl': '👧',
+            dragon: '🐉', wolf: '🐺', witch: '🧙‍♀️', wizard: '🧙‍♂️',
+            troll: '🧌', pig: '🐷', donkey: '🫏', princess: '👸',
+            prince: '🤴', knight: '🤺', fairy: '🧚', elf: '🧝',
+            unicorn: '🦄', rabbit: '🐰', bear: '🐻', fox: '🦊',
+            owl: '🦉', mouse: '🐭', frog: '🐸', lion: '🦁',
+            turtle: '🐢', squirrel: '🐿️'
+        };
+        return emojis[species.toLowerCase()] || '🧑';
+    } else if (cardType === 'environment') {
+        const emojis = {
+            village: '🏘️', city: '🏙️', park: '🏞️', forest: '🌲',
+            mountain: '⛰️', lake: '🏞️', sea: '🌊', beach: '🏖️',
+            castle: '🏰', cave: '🕳️', meadow: '🌾', river: '🏞️',
+            desert: '🏜️', jungle: '🌴', island: '🏝️', garden: '🏡',
+            farm: '🚜', tower: '🗼', bridge: '🌉', waterfall: '💦',
+            valley: '🏔️', swamp: '🌿'
+        };
+        return emojis[species.toLowerCase()] || '🏞️';
+    } else {
+        return '💖';
+    }
 }
 
 async function loadRegisteredCards() {
     try {
         const response = await fetch(`${API_BASE}/cards`);
         const cards = await response.json();
+        state.registeredCards = cards;
 
         if (!elements.rfidButtons) return;
 
@@ -97,18 +171,21 @@ async function loadRegisteredCards() {
 
         // Create a button for each registered card
         for (const [uid, cardInfo] of Object.entries(cards)) {
-            const animal = cardInfo.animal;
-            const emoji = getAnimalEmoji(animal);
+            // Handle both legacy and new format
+            const cardType = cardInfo.card_type || 'character';
+            const species = cardInfo.species || cardInfo.animal || 'unknown';
+            const name = cardInfo.name || cardInfo.animal || species;
+            const emoji = getSpeciesEmoji(species, cardType);
 
             const button = document.createElement('button');
-            button.className = 'rfid-btn';
-            button.setAttribute('data-animal', animal);
+            button.className = `rfid-btn ${cardType}`;
             button.setAttribute('data-uid', uid);
-            button.innerHTML = `${emoji} ${animal.charAt(0).toUpperCase() + animal.slice(1)}`;
+            button.setAttribute('data-type', cardType);
+            button.innerHTML = `${emoji} ${name.charAt(0).toUpperCase() + name.slice(1)}`;
 
             // Add click event listener
             button.addEventListener('click', () => {
-                simulateRFIDTap(animal);
+                simulateRFIDTap(uid);
             });
 
             elements.rfidButtons.appendChild(button);
@@ -128,11 +205,16 @@ async function loadCurrentState() {
         const response = await fetch(`${API_BASE}/story/current`);
         const data = await response.json();
 
-        // Update animals if changed
-        if (JSON.stringify(data.selected_animals) !== JSON.stringify(state.selectedAnimals)) {
-            state.selectedAnimals = data.selected_animals;
-            renderAnimals();
+        // Update selected cards if changed
+        if (JSON.stringify(data.selected_cards) !== JSON.stringify(state.selectedCards)) {
+            state.selectedCards = data.selected_cards || [];
+            state.hasCharacter = data.has_character || false;
+            state.storyElements = data.story_elements;
+            renderCards();
         }
+
+        // Update legacy animals for backward compatibility
+        state.selectedAnimals = data.selected_animals || [];
 
         // Update status
         if (data.is_generating && !state.isGenerating) {
@@ -148,74 +230,178 @@ async function loadCurrentState() {
     }
 }
 
-function renderAnimals() {
-    const container = elements.selectedAnimals;
+function renderCards() {
+    const container = elements.selectedCards;
 
-    if (state.selectedAnimals.length === 0) {
-        container.innerHTML = '<p class="no-animals">No animals selected yet. Tap an RFID card or use voice command.</p>';
+    if (state.selectedCards.length === 0) {
+        container.innerHTML = '<p class="no-animals">No cards selected yet. Tap an RFID card or use voice command.</p>';
         elements.clearAnimalsBtn.disabled = true;
+        elements.noCharacterWarning.style.display = 'none';
+        elements.storyElementsPreview.style.display = 'none';
         return;
     }
 
-    container.innerHTML = state.selectedAnimals.map(animal => `
-        <span class="animal-chip">
-            ${getAnimalEmoji(animal)} ${animal}
-            <span class="remove" onclick="removeAnimal('${animal}')">&times;</span>
-        </span>
-    `).join('');
-
-    elements.clearAnimalsBtn.disabled = false;
-}
-
-function getAnimalEmoji(animal) {
-    const emojis = {
-        cat: '🐱', gato: '🐱',
-        dog: '🐶', perro: '🐶',
-        lion: '🦁', leon: '🦁', león: '🦁',
-        tiger: '🐯', tigre: '🐯',
-        elephant: '🐘', elefante: '🐘',
-        giraffe: '🦒', jirafa: '🦒',
-        monkey: '🐒', mono: '🐒',
-        bear: '🐻', oso: '🐻',
-        rabbit: '🐰', conejo: '🐰',
-        bird: '🐦', pajaro: '🐦', pájaro: '🐦',
-        fish: '🐟', pez: '🐟',
-        snake: '🐍', serpiente: '🐍',
-        horse: '🐴', caballo: '🐴',
-        wolf: '🐺', lobo: '🐺',
-        fox: '🦊', zorro: '🦊',
-        zebra: '🦓', cebra: '🦓',
-        turtle: '🐢', tortuga: '🐢',
-        dolphin: '🐬', delfin: '🐬', delfín: '🐬',
-        whale: '🐋', ballena: '🐋',
-        owl: '🦉', buho: '🦉', búho: '🦉',
+    // Group cards by type
+    const cardsByType = {
+        character: [],
+        environment: [],
+        moral_lesson: []
     };
-    return emojis[animal.toLowerCase()] || '🐾';
-}
 
-async function removeAnimal(animal) {
-    try {
-        await fetch(`${API_BASE}/animals/${animal}`, { method: 'DELETE' });
-        state.selectedAnimals = state.selectedAnimals.filter(a => a !== animal);
-        renderAnimals();
-    } catch (error) {
-        console.error('Failed to remove animal:', error);
+    state.selectedCards.forEach(card => {
+        const type = card.card_type || 'character';
+        if (cardsByType[type]) {
+            cardsByType[type].push(card);
+        }
+    });
+
+    let html = '';
+
+    // Render characters
+    if (cardsByType.character.length > 0) {
+        html += '<div class="cards-type-section">';
+        html += '<h4><span class="indicator character"></span>Characters</h4>';
+        cardsByType.character.forEach(card => {
+            const emoji = getSpeciesEmoji(card.species, 'character');
+            const name = card.name || card.species;
+            const role = card.role || 'secondary';
+            html += `<span class="card-chip character" data-uid="${card.uid}">
+                <span class="type-icon">${emoji}</span>
+                <span class="name">${name}</span>
+                <span class="role" onclick="showRoleSelector('${card.uid}', '${name}')">${role}</span>
+                <span class="remove" onclick="removeCard('${card.uid}')">&times;</span>
+            </span>`;
+        });
+        html += '</div>';
+    }
+
+    // Render environments
+    if (cardsByType.environment.length > 0) {
+        html += '<div class="cards-type-section">';
+        html += '<h4><span class="indicator environment"></span>Environments</h4>';
+        cardsByType.environment.forEach(card => {
+            const emoji = getSpeciesEmoji(card.species, 'environment');
+            const name = card.name || card.species;
+            html += `<span class="card-chip environment" data-uid="${card.uid}">
+                <span class="type-icon">${emoji}</span>
+                <span class="name">${name}</span>
+                <span class="remove" onclick="removeCard('${card.uid}')">&times;</span>
+            </span>`;
+        });
+        html += '</div>';
+    }
+
+    // Render moral lessons
+    if (cardsByType.moral_lesson.length > 0) {
+        html += '<div class="cards-type-section">';
+        html += '<h4><span class="indicator moral_lesson"></span>Moral Lessons</h4>';
+        cardsByType.moral_lesson.forEach(card => {
+            html += `<span class="card-chip moral_lesson" data-uid="${card.uid}">
+                <span class="type-icon">💖</span>
+                <span class="name">${card.species}</span>
+                <span class="remove" onclick="removeCard('${card.uid}')">&times;</span>
+            </span>`;
+        });
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+    elements.clearAnimalsBtn.disabled = false;
+
+    // Show/hide character warning
+    if (!state.hasCharacter) {
+        elements.noCharacterWarning.style.display = 'block';
+    } else {
+        elements.noCharacterWarning.style.display = 'none';
+    }
+
+    // Show story elements preview
+    if (state.storyElements) {
+        elements.storyElementsPreview.style.display = 'block';
+        elements.previewEnvironment.textContent = state.storyElements.environment || '(random)';
+        elements.previewMoral.textContent = state.storyElements.moral_lesson || '(random)';
+    } else {
+        elements.storyElementsPreview.style.display = 'none';
     }
 }
 
-async function clearAnimals() {
+let currentRoleCardUid = null;
+
+function showRoleSelector(uid, name) {
+    currentRoleCardUid = uid;
+    elements.roleSelectorCharacter.textContent = `Character: ${name}`;
+    elements.roleSelectorOverlay.classList.add('active');
+
+    // Set up role option click handlers
+    const roleOptions = elements.roleSelectorOverlay.querySelectorAll('.role-option');
+    roleOptions.forEach(option => {
+        option.onclick = () => updateCardRole(uid, option.dataset.role);
+    });
+}
+
+function closeRoleSelector() {
+    elements.roleSelectorOverlay.classList.remove('active');
+    currentRoleCardUid = null;
+}
+
+async function updateCardRole(uid, role) {
     try {
-        await fetch(`${API_BASE}/animals/clear`, { method: 'POST' });
-        state.selectedAnimals = [];
-        renderAnimals();
+        const response = await fetch(`${API_BASE}/cards/selected/${uid}/role`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'updated') {
+            // Update local state
+            const card = state.selectedCards.find(c => c.uid === uid);
+            if (card) {
+                card.role = role;
+                renderCards();
+            }
+            closeRoleSelector();
+        } else {
+            console.error('Failed to update role:', data.error);
+        }
     } catch (error) {
-        console.error('Failed to clear animals:', error);
+        console.error('Failed to update card role:', error);
+    }
+}
+
+async function removeCard(uid) {
+    try {
+        await fetch(`${API_BASE}/cards/selected/${uid}`, { method: 'DELETE' });
+        state.selectedCards = state.selectedCards.filter(c => c.uid !== uid);
+        renderCards();
+    } catch (error) {
+        console.error('Failed to remove card:', error);
+    }
+}
+
+async function clearCards() {
+    try {
+        await fetch(`${API_BASE}/cards/selected/clear`, { method: 'POST' });
+        state.selectedCards = [];
+        state.hasCharacter = false;
+        state.storyElements = null;
+        renderCards();
+    } catch (error) {
+        console.error('Failed to clear cards:', error);
     }
 }
 
 async function generateStory() {
-    if (state.selectedAnimals.length === 0) {
-        alert('Please select at least one animal first!');
+    // Check for at least one character
+    if (!state.hasCharacter && state.selectedCards.length > 0) {
+        alert('Please add at least one character card to generate a story!');
+        return;
+    }
+
+    // Legacy check for animals
+    if (state.selectedAnimals.length === 0 && state.selectedCards.length === 0) {
+        alert('Please select at least one character first!');
         return;
     }
 
@@ -227,7 +413,10 @@ async function generateStory() {
         const response = await fetch(`${API_BASE}/story/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ animals: state.selectedAnimals })
+            body: JSON.stringify({
+                animals: state.selectedAnimals,
+                story_minutes: state.storyLengthMinutes
+            })
         });
 
         const data = await response.json();
@@ -291,7 +480,7 @@ async function listenForVoice() {
                     state.selectedAnimals.push(animal);
                 }
             }
-            renderAnimals();
+            renderCards();
 
             // Show what was heard
             alert(`Heard: "${data.text}"\nAnimals: ${data.animals.join(', ')}`);
@@ -436,26 +625,26 @@ async function updateLEDRing() {
 
 // RFID Simulation Functions
 
-async function simulateRFIDTap(animal) {
+async function simulateRFIDTap(uid) {
     try {
         const response = await fetch(`${API_BASE}/hardware/rfid/inject`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ animal })
+            body: JSON.stringify({ uid })
         });
 
         const data = await response.json();
 
         if (data.status === 'injected') {
             // Visual feedback
-            const btn = elements.rfidButtons.querySelector(`[data-animal="${animal}"]`);
+            const btn = elements.rfidButtons.querySelector(`[data-uid="${uid}"]`);
             if (btn) {
                 btn.classList.add('tapped');
                 setTimeout(() => btn.classList.remove('tapped'), 500);
             }
 
             // The RFID polling loop will pick up the injected card
-            // and add it to selected animals automatically
+            // and add it to selected cards automatically
             setTimeout(loadCurrentState, 500);
         } else {
             console.error('Failed to inject RFID card:', data.error);
@@ -465,5 +654,70 @@ async function simulateRFIDTap(animal) {
     }
 }
 
-// Make removeAnimal available globally for onclick handlers
-window.removeAnimal = removeAnimal;
+// Story Length Slider Functions
+
+function getStoryLengthDescription(minutes) {
+    if (minutes <= 3) return '(very short)';
+    if (minutes <= 6) return '(short)';
+    if (minutes <= 9) return '(medium)';
+    if (minutes <= 12) return '(long)';
+    return '(very long)';
+}
+
+function updateStoryLengthDisplay(minutes) {
+    if (elements.storyLengthMinutes) {
+        elements.storyLengthMinutes.textContent = minutes;
+    }
+    if (elements.storyLengthDescription) {
+        elements.storyLengthDescription.textContent = getStoryLengthDescription(minutes);
+    }
+    state.storyLengthMinutes = minutes;
+}
+
+function onStoryLengthChange(e) {
+    // Update display immediately for smooth feedback
+    const minutes = parseInt(e.target.value);
+    updateStoryLengthDisplay(minutes);
+}
+
+async function onStoryLengthCommit(e) {
+    // Send final value to backend when user releases slider
+    const minutes = parseInt(e.target.value);
+    try {
+        const response = await fetch(`${API_BASE}/hardware/slider/set`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes })
+        });
+
+        if (!response.ok) {
+            // Slider set failed (maybe not in mock mode)
+            console.log('Slider set not available (hardware mode?)');
+        }
+    } catch (error) {
+        console.error('Failed to set slider value:', error);
+    }
+}
+
+async function loadSliderState() {
+    if (!elements.storyLengthSlider) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/hardware/slider`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        // Only update if slider isn't being dragged
+        if (document.activeElement !== elements.storyLengthSlider) {
+            elements.storyLengthSlider.value = data.minutes;
+            updateStoryLengthDisplay(data.minutes);
+        }
+    } catch (error) {
+        // Silently fail - slider may not be available
+    }
+}
+
+// Make functions globally accessible for onclick handlers
+window.removeCard = removeCard;
+window.showRoleSelector = showRoleSelector;

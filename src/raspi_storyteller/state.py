@@ -5,15 +5,54 @@ Manages selected animals, current story, RFID card database, and audio state.
 """
 
 import json
+import random
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# Card type enumeration
+class CardType(str, Enum):
+    CHARACTER = "character"
+    ENVIRONMENT = "environment"
+    MORAL_LESSON = "moral_lesson"
+
+
+# Character role enumeration
+class CharacterRole(str, Enum):
+    MAIN = "main"
+    SECONDARY = "secondary"
+    FELON = "felon"
+    EVIL = "evil"
+
+
+# Default species for each card type
+DEFAULT_SPECIES = {
+    CardType.CHARACTER: [
+        "dog", "cat", "little boy", "little girl", "dragon", "wolf", "witch",
+        "wizard", "troll", "pig", "donkey", "princess", "prince", "knight",
+        "fairy", "elf", "unicorn", "rabbit", "bear", "fox", "owl", "mouse",
+        "frog", "lion", "turtle", "squirrel"
+    ],
+    CardType.ENVIRONMENT: [
+        "village", "city", "park", "forest", "mountain", "lake", "sea", "beach",
+        "castle", "cave", "meadow", "river", "desert", "jungle", "island",
+        "garden", "farm", "tower", "bridge", "waterfall", "valley", "swamp"
+    ],
+    CardType.MORAL_LESSON: [
+        "friendship", "sharing", "caring", "brotherhood", "nature", "braveness",
+        "honesty", "kindness", "respect", "patience", "perseverance", "gratitude",
+        "forgiveness", "teamwork", "responsibility", "empathy", "generosity",
+        "humility", "loyalty", "courage", "love", "acceptance"
+    ],
+}
 
 
 @dataclass
@@ -26,12 +65,78 @@ class AudioSegment:
 
 
 @dataclass
+class Card:
+    """Represents an RFID card with type and species."""
+
+    uid: str
+    card_type: CardType
+    species: str
+    name: Optional[str] = None  # Name used in story (not required for moral lessons)
+    role: Optional[CharacterRole] = None  # Only for character cards
+    registered: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "card_type": self.card_type.value,
+            "species": self.species,
+            "name": self.name,
+            "role": self.role.value if self.role else None,
+            "registered": self.registered,
+        }
+
+    @classmethod
+    def from_dict(cls, uid: str, data: Dict[str, Any]) -> "Card":
+        """Create Card from dictionary."""
+        # Handle legacy cards that only have "animal" field
+        if "animal" in data and "card_type" not in data:
+            return cls(
+                uid=uid,
+                card_type=CardType.CHARACTER,
+                species=data["animal"],
+                name=data["animal"],
+                role=CharacterRole.MAIN,
+                registered=data.get("registered", datetime.now().isoformat()),
+            )
+
+        return cls(
+            uid=uid,
+            card_type=CardType(data["card_type"]),
+            species=data["species"],
+            name=data.get("name"),
+            role=CharacterRole(data["role"]) if data.get("role") else None,
+            registered=data.get("registered", datetime.now().isoformat()),
+        )
+
+
+@dataclass
+class SelectedCard:
+    """Represents a card currently selected for story generation."""
+
+    card: Card
+    role: Optional[CharacterRole] = None  # Override role for this story session
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "uid": self.card.uid,
+            "card_type": self.card.card_type.value,
+            "species": self.card.species,
+            "name": self.card.name,
+            "role": (self.role or self.card.role).value if (self.role or self.card.role) else None,
+        }
+
+
+@dataclass
 class Story:
     """Represents a generated story with text and audio segments."""
 
     full_text: str
     audio_segments: List[AudioSegment] = field(default_factory=list)
     animals: List[str] = field(default_factory=list)
+    characters: List[Dict[str, Any]] = field(default_factory=list)
+    environment: Optional[str] = None
+    moral_lesson: Optional[str] = None
     status: str = "pending"
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
@@ -41,34 +146,41 @@ class StorytellerState:
     Thread-safe state management for the storyteller application.
 
     Manages:
-    - Selected animals from RFID cards
+    - Selected cards from RFID (characters, environments, moral lessons)
     - Current story and audio state
     - RFID card database
+    - Species metadata (custom characters, environments, lessons)
     - Playback state
     """
 
-    def __init__(self, cards_db_path: str = "cards_db.json"):
+    def __init__(self, cards_db_path: str = "cards_db.json", species_db_path: str = "species_db.json"):
         """
         Initialize the storyteller state.
 
         Args:
             cards_db_path: Path to the JSON file storing RFID card mappings.
+            species_db_path: Path to the JSON file storing custom species.
         """
         self._lock = threading.RLock()
         self._cards_db_path = Path(cards_db_path)
+        self._species_db_path = Path(species_db_path)
 
         # State variables
-        self._selected_animals: List[str] = []
+        self._selected_animals: List[str] = []  # Legacy compatibility
+        self._selected_cards: List[SelectedCard] = []  # New card system
         self._current_story: Optional[Story] = None
         self._cards_db: Dict[str, Dict[str, Any]] = {}
+        self._species_db: Dict[str, List[str]] = {}  # Custom species by type
         self._is_generating: bool = False
         self._is_playing: bool = False
         self._current_segment_index: int = 0
         self._last_rfid_uid: Optional[str] = None
         self._last_rfid_time: Optional[datetime] = None
+        self._story_length_minutes: int = 5  # Default story duration
 
-        # Load cards database
+        # Load databases
         self._load_cards_db()
+        self._load_species_db()
 
         logger.info("StorytellerState initialized")
 
@@ -86,6 +198,20 @@ class StorytellerState:
             logger.info("No cards database found, starting fresh")
             self._cards_db = {}
 
+    def _load_species_db(self) -> None:
+        """Load the species database from JSON file."""
+        if self._species_db_path.exists():
+            try:
+                with open(self._species_db_path, "r") as f:
+                    self._species_db = json.load(f)
+                logger.info(f"Loaded custom species from database")
+            except (json.JSONDecodeError, IOError) as e:
+                logger.error(f"Failed to load species database: {e}")
+                self._species_db = {}
+        else:
+            logger.info("No species database found, using defaults")
+            self._species_db = {}
+
     def save_cards_db(self) -> None:
         """Save the cards database to JSON file."""
         with self._lock:
@@ -96,32 +222,202 @@ class StorytellerState:
             except IOError as e:
                 logger.error(f"Failed to save cards database: {e}")
 
-    # Animal management
+    def save_species_db(self) -> None:
+        """Save the species database to JSON file."""
+        with self._lock:
+            try:
+                with open(self._species_db_path, "w") as f:
+                    json.dump(self._species_db, f, indent=2)
+                logger.info("Saved species database")
+            except IOError as e:
+                logger.error(f"Failed to save species database: {e}")
+
+    # Species management
+    def get_species_for_type(self, card_type: CardType) -> List[str]:
+        """Get all species for a card type (defaults + custom)."""
+        with self._lock:
+            default_species = DEFAULT_SPECIES.get(card_type, [])
+            custom_species = self._species_db.get(card_type.value, [])
+            # Combine and deduplicate
+            all_species = list(default_species) + [s for s in custom_species if s not in default_species]
+            return sorted(all_species)
+
+    def add_species(self, card_type: CardType, species: str) -> bool:
+        """Add a custom species to a card type."""
+        with self._lock:
+            species = species.strip().lower()
+            if not species:
+                return False
+
+            # Check if already exists (in defaults or custom)
+            if species in DEFAULT_SPECIES.get(card_type, []):
+                return False
+
+            if card_type.value not in self._species_db:
+                self._species_db[card_type.value] = []
+
+            if species not in self._species_db[card_type.value]:
+                self._species_db[card_type.value].append(species)
+                self.save_species_db()
+                logger.info(f"Added custom species: {species} to {card_type.value}")
+                return True
+            return False
+
+    def remove_species(self, card_type: CardType, species: str) -> bool:
+        """Remove a custom species (cannot remove defaults)."""
+        with self._lock:
+            species = species.strip().lower()
+            if card_type.value in self._species_db and species in self._species_db[card_type.value]:
+                self._species_db[card_type.value].remove(species)
+                self.save_species_db()
+                logger.info(f"Removed custom species: {species} from {card_type.value}")
+                return True
+            return False
+
+    def get_random_species(self, card_type: CardType) -> str:
+        """Get a random species for a card type."""
+        species_list = self.get_species_for_type(card_type)
+        return random.choice(species_list) if species_list else ""
+
+    # Animal management (legacy compatibility)
     @property
     def selected_animals(self) -> List[str]:
-        """Get the list of currently selected animals."""
+        """Get the list of currently selected animals (legacy compatibility)."""
         with self._lock:
+            # Return names from selected character cards, fallback to legacy list
+            if self._selected_cards:
+                return [
+                    sc.card.name or sc.card.species
+                    for sc in self._selected_cards
+                    if sc.card.card_type == CardType.CHARACTER
+                ]
             return self._selected_animals.copy()
 
     def add_animal(self, animal: str) -> None:
-        """Add an animal to the selection."""
+        """Add an animal to the selection (legacy compatibility)."""
         with self._lock:
             if animal and animal not in self._selected_animals:
                 self._selected_animals.append(animal)
                 logger.info(f"Added animal: {animal}")
 
     def remove_animal(self, animal: str) -> None:
-        """Remove an animal from the selection."""
+        """Remove an animal from the selection (legacy compatibility)."""
         with self._lock:
             if animal in self._selected_animals:
                 self._selected_animals.remove(animal)
                 logger.info(f"Removed animal: {animal}")
 
     def clear_animals(self) -> None:
-        """Clear all selected animals."""
+        """Clear all selected animals (legacy compatibility)."""
         with self._lock:
             self._selected_animals.clear()
             logger.info("Cleared all animals")
+
+    # Selected cards management
+    @property
+    def selected_cards(self) -> List[SelectedCard]:
+        """Get the list of currently selected cards."""
+        with self._lock:
+            return self._selected_cards.copy()
+
+    def add_selected_card(self, card: Card, role: Optional[CharacterRole] = None) -> None:
+        """Add a card to the selection."""
+        with self._lock:
+            # Check if card is already selected
+            for sc in self._selected_cards:
+                if sc.card.uid == card.uid:
+                    return  # Already selected
+
+            # For first character, default to main role
+            if card.card_type == CardType.CHARACTER:
+                if role is None:
+                    # First character is main, others are secondary
+                    has_main = any(
+                        (sc.role or sc.card.role) == CharacterRole.MAIN
+                        for sc in self._selected_cards
+                        if sc.card.card_type == CardType.CHARACTER
+                    )
+                    role = CharacterRole.SECONDARY if has_main else CharacterRole.MAIN
+
+            self._selected_cards.append(SelectedCard(card=card, role=role))
+            # Also add to legacy animals list for backwards compatibility
+            if card.card_type == CardType.CHARACTER:
+                name = card.name or card.species
+                if name not in self._selected_animals:
+                    self._selected_animals.append(name)
+            logger.info(f"Added card: {card.uid} ({card.card_type.value}: {card.species})")
+
+    def remove_selected_card(self, uid: str) -> None:
+        """Remove a card from the selection by UID."""
+        with self._lock:
+            for sc in self._selected_cards[:]:
+                if sc.card.uid == uid:
+                    self._selected_cards.remove(sc)
+                    # Also remove from legacy animals list
+                    if sc.card.card_type == CardType.CHARACTER:
+                        name = sc.card.name or sc.card.species
+                        if name in self._selected_animals:
+                            self._selected_animals.remove(name)
+                    logger.info(f"Removed card: {uid}")
+                    break
+
+    def update_card_role(self, uid: str, role: CharacterRole) -> bool:
+        """Update the role of a selected character card."""
+        with self._lock:
+            for sc in self._selected_cards:
+                if sc.card.uid == uid and sc.card.card_type == CardType.CHARACTER:
+                    sc.role = role
+                    logger.info(f"Updated card role: {uid} -> {role.value}")
+                    return True
+            return False
+
+    def clear_selected_cards(self) -> None:
+        """Clear all selected cards."""
+        with self._lock:
+            self._selected_cards.clear()
+            self._selected_animals.clear()
+            logger.info("Cleared all selected cards")
+
+    def get_selected_by_type(self, card_type: CardType) -> List[SelectedCard]:
+        """Get selected cards filtered by type."""
+        with self._lock:
+            return [sc for sc in self._selected_cards if sc.card.card_type == card_type]
+
+    def has_character_card(self) -> bool:
+        """Check if at least one character card is selected."""
+        with self._lock:
+            return any(sc.card.card_type == CardType.CHARACTER for sc in self._selected_cards)
+
+    def get_story_elements(self) -> Dict[str, Any]:
+        """Get all story elements from selected cards."""
+        with self._lock:
+            characters = []
+            environment = None
+            moral_lesson = None
+
+            for sc in self._selected_cards:
+                if sc.card.card_type == CardType.CHARACTER:
+                    characters.append({
+                        "name": sc.card.name or sc.card.species,
+                        "species": sc.card.species,
+                        "role": (sc.role or sc.card.role or CharacterRole.SECONDARY).value,
+                    })
+                elif sc.card.card_type == CardType.ENVIRONMENT:
+                    environment = sc.card.species
+                elif sc.card.card_type == CardType.MORAL_LESSON:
+                    moral_lesson = sc.card.species
+
+            # If no environment or moral lesson selected, pick random ones
+            if environment is None:
+                environment = self.get_random_species(CardType.ENVIRONMENT)
+            if moral_lesson is None:
+                moral_lesson = self.get_random_species(CardType.MORAL_LESSON)
+
+            return {
+                "characters": characters,
+                "environment": environment,
+                "moral_lesson": moral_lesson,
+            }
 
     # Story management
     @property
@@ -202,21 +498,55 @@ class StorytellerState:
         with self._lock:
             return self._cards_db.copy()
 
-    def register_card(self, uid: str, animal: str) -> None:
+    def register_card(
+        self,
+        uid: str,
+        card_type: CardType,
+        species: str,
+        name: Optional[str] = None,
+        role: Optional[CharacterRole] = None,
+    ) -> Card:
         """
-        Register a new RFID card with an animal.
+        Register a new RFID card.
+
+        Args:
+            uid: The RFID card UID.
+            card_type: The type of card (character, environment, moral_lesson).
+            species: The species/instance (e.g., dog, forest, friendship).
+            name: The name used in story (required for character/environment, not moral lesson).
+            role: Character role (only for character cards).
+
+        Returns:
+            The created Card object.
+        """
+        with self._lock:
+            card = Card(
+                uid=uid,
+                card_type=card_type,
+                species=species,
+                name=name,
+                role=role if card_type == CardType.CHARACTER else None,
+            )
+            self._cards_db[uid] = card.to_dict()
+            self.save_cards_db()
+            logger.info(f"Registered card {uid}: {card_type.value} - {species}")
+            return card
+
+    def register_card_legacy(self, uid: str, animal: str) -> None:
+        """
+        Register a new RFID card with an animal (legacy compatibility).
 
         Args:
             uid: The RFID card UID.
             animal: The animal name to associate with the card.
         """
-        with self._lock:
-            self._cards_db[uid] = {
-                "animal": animal,
-                "registered": datetime.now().isoformat(),
-            }
-            self.save_cards_db()
-            logger.info(f"Registered card {uid} with animal {animal}")
+        self.register_card(
+            uid=uid,
+            card_type=CardType.CHARACTER,
+            species=animal,
+            name=animal,
+            role=CharacterRole.MAIN,
+        )
 
     def unregister_card(self, uid: str) -> bool:
         """
@@ -236,9 +566,25 @@ class StorytellerState:
                 return True
             return False
 
+    def get_card(self, uid: str) -> Optional[Card]:
+        """
+        Get a Card object for the given UID.
+
+        Args:
+            uid: The RFID card UID.
+
+        Returns:
+            Card object or None if not found.
+        """
+        with self._lock:
+            data = self._cards_db.get(uid)
+            if data:
+                return Card.from_dict(uid, data)
+            return None
+
     def get_animal_for_card(self, uid: str) -> Optional[str]:
         """
-        Get the animal associated with an RFID card.
+        Get the animal/name associated with an RFID card (legacy compatibility).
 
         Args:
             uid: The RFID card UID.
@@ -247,8 +593,32 @@ class StorytellerState:
             The animal name or None if not found.
         """
         with self._lock:
-            card = self._cards_db.get(uid)
-            return card["animal"] if card else None
+            data = self._cards_db.get(uid)
+            if data:
+                # Handle both new and legacy format
+                if "animal" in data:
+                    return data["animal"]
+                return data.get("name") or data.get("species")
+            return None
+
+    def get_card_type(self, uid: str) -> Optional[CardType]:
+        """
+        Get the type of an RFID card.
+
+        Args:
+            uid: The RFID card UID.
+
+        Returns:
+            CardType or None if not found.
+        """
+        with self._lock:
+            data = self._cards_db.get(uid)
+            if data:
+                if "card_type" in data:
+                    return CardType(data["card_type"])
+                # Legacy cards are characters
+                return CardType.CHARACTER
+            return None
 
     # RFID debounce
     def should_process_card(self, uid: str, debounce_time: float = 1.5) -> bool:
@@ -275,6 +645,24 @@ class StorytellerState:
             self._last_rfid_time = now
             return True
 
+    # Story length management
+    @property
+    def story_length_minutes(self) -> int:
+        """Get the current story length setting in minutes."""
+        with self._lock:
+            return self._story_length_minutes
+
+    def set_story_length(self, minutes: int) -> None:
+        """
+        Set the story length in minutes.
+
+        Args:
+            minutes: Story duration (1-15 minutes).
+        """
+        with self._lock:
+            self._story_length_minutes = max(1, min(15, minutes))
+            logger.debug(f"Story length set to {self._story_length_minutes} minutes")
+
     # Serialization
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for API responses."""
@@ -288,14 +676,21 @@ class StorytellerState:
                         for seg in self._current_story.audio_segments
                     ],
                     "animals": self._current_story.animals,
+                    "characters": self._current_story.characters,
+                    "environment": self._current_story.environment,
+                    "moral_lesson": self._current_story.moral_lesson,
                     "status": self._current_story.status,
                     "created_at": self._current_story.created_at,
                 }
 
             return {
                 "selected_animals": self._selected_animals.copy(),
+                "selected_cards": [sc.to_dict() for sc in self._selected_cards],
+                "has_character": self.has_character_card(),
+                "story_elements": self.get_story_elements() if self._selected_cards else None,
                 "current_story": story_dict,
                 "is_generating": self._is_generating,
                 "is_playing": self._is_playing,
                 "current_segment_index": self._current_segment_index,
+                "story_length_minutes": self._story_length_minutes,
             }

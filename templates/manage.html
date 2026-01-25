@@ -5,11 +5,184 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Cards - AI Storyteller</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Card type specific colors */
+        .card-type-character { border-left: 4px solid var(--success-color); }
+        .card-type-environment { border-left: 4px solid #3b82f6; }
+        .card-type-moral_lesson { border-left: 4px solid #a855f7; }
+
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .type-badge.character { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
+        .type-badge.environment { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .type-badge.moral_lesson { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+
+        .role-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            background: rgba(255, 255, 255, 0.15);
+            margin-left: 4px;
+        }
+
+        /* Species management section */
+        .species-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+        }
+
+        .species-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .species-tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: var(--border-color);
+            color: var(--text-muted);
+            transition: var(--transition);
+        }
+
+        .species-tab.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .species-tab.character.active { background: var(--success-color); }
+        .species-tab.environment.active { background: #3b82f6; }
+        .species-tab.moral_lesson.active { background: #a855f7; }
+
+        .species-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .species-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: var(--border-color);
+            border-radius: 16px;
+            font-size: 0.875rem;
+        }
+
+        .species-chip.custom {
+            background: var(--secondary-color);
+        }
+
+        .species-chip .remove {
+            cursor: pointer;
+            opacity: 0.6;
+            font-size: 1rem;
+        }
+
+        .species-chip .remove:hover {
+            opacity: 1;
+            color: var(--error-color);
+        }
+
+        .add-species-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .add-species-form input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        /* Type selector styles */
+        .type-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .type-option {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: var(--transition);
+            background: var(--bg-secondary);
+        }
+
+        .type-option:hover {
+            border-color: var(--primary-color);
+        }
+
+        .type-option.selected {
+            border-color: var(--primary-color);
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .type-option.character.selected { border-color: var(--success-color); background: rgba(34, 197, 94, 0.15); }
+        .type-option.environment.selected { border-color: #3b82f6; background: rgba(59, 130, 246, 0.15); }
+        .type-option.moral_lesson.selected { border-color: #a855f7; background: rgba(168, 85, 247, 0.15); }
+
+        .type-option .icon {
+            font-size: 2rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .type-option .label {
+            font-weight: 600;
+        }
+
+        /* Role selector */
+        .role-selector {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .role-option {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            background: var(--bg-secondary);
+            transition: var(--transition);
+        }
+
+        .role-option:hover {
+            border-color: var(--success-color);
+        }
+
+        .role-option.selected {
+            border-color: var(--success-color);
+            background: rgba(34, 197, 94, 0.2);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📇 Card Management</h1>
+            <h1>Card Management</h1>
             <p class="subtitle">Register and manage RFID cards</p>
         </header>
 
@@ -22,19 +195,53 @@
         <!-- Register New Card -->
         <section class="form-section">
             <h2>Register New Card</h2>
+
+            <!-- Card Type Selector -->
+            <div class="form-group">
+                <label>Card Type</label>
+                <div class="type-selector">
+                    <div class="type-option character selected" data-type="character">
+                        <span class="icon">&#129409;</span>
+                        <span class="label">Character</span>
+                    </div>
+                    <div class="type-option environment" data-type="environment">
+                        <span class="icon">&#127795;</span>
+                        <span class="label">Environment</span>
+                    </div>
+                    <div class="type-option moral_lesson" data-type="moral_lesson">
+                        <span class="icon">&#128150;</span>
+                        <span class="label">Moral Lesson</span>
+                    </div>
+                </div>
+            </div>
+
             <form id="register-form" class="card-form">
                 <div class="form-group">
-                    <label for="card-uid">Card UID</label>
-                    <input type="text" id="card-uid" name="uid" placeholder="e.g., 1234567890" required>
-                    <small>The unique identifier on the RFID card</small>
+                    <label for="card-species">Species / Instance</label>
+                    <select id="card-species" name="species" required>
+                        <option value="">Select a species...</option>
+                    </select>
+                    <small id="species-hint">Select the type of character</small>
                 </div>
-                <div class="form-group">
-                    <label for="card-animal">Animal Name</label>
-                    <input type="text" id="card-animal" name="animal" placeholder="e.g., cat, dog, lion" required>
-                    <small>The animal this card will represent</small>
+
+                <div class="form-group" id="name-group">
+                    <label for="card-name">Name (used in story)</label>
+                    <input type="text" id="card-name" name="name" placeholder="e.g., Buddy, Princess Luna">
+                    <small>The name that will appear in the story</small>
                 </div>
+
+                <div class="form-group" id="role-group">
+                    <label>Character Role</label>
+                    <div class="role-selector">
+                        <div class="role-option selected" data-role="main">Main Character</div>
+                        <div class="role-option" data-role="secondary">Secondary</div>
+                        <div class="role-option" data-role="felon">Felon</div>
+                        <div class="role-option" data-role="evil">Evil/Villain</div>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-primary">
-                    <span class="icon">💾</span>
+                    <span class="icon">&#128190;</span>
                     Save Card
                 </button>
             </form>
@@ -49,57 +256,227 @@
             </div>
         </section>
 
-        <!-- Quick Add Animals -->
-        <section class="quick-add-section">
-            <h2>Quick Add (Common Animals)</h2>
-            <div class="quick-animals">
-                <button class="animal-btn" data-animal="cat">🐱 Cat</button>
-                <button class="animal-btn" data-animal="dog">🐶 Dog</button>
-                <button class="animal-btn" data-animal="lion">🦁 Lion</button>
-                <button class="animal-btn" data-animal="elephant">🐘 Elephant</button>
-                <button class="animal-btn" data-animal="giraffe">🦒 Giraffe</button>
-                <button class="animal-btn" data-animal="monkey">🐒 Monkey</button>
-                <button class="animal-btn" data-animal="bear">🐻 Bear</button>
-                <button class="animal-btn" data-animal="rabbit">🐰 Rabbit</button>
-                <button class="animal-btn" data-animal="bird">🐦 Bird</button>
-                <button class="animal-btn" data-animal="fish">🐟 Fish</button>
-                <button class="animal-btn" data-animal="turtle">🐢 Turtle</button>
-                <button class="animal-btn" data-animal="owl">🦉 Owl</button>
+        <!-- Species Management -->
+        <section class="species-section">
+            <h2>Manage Species</h2>
+            <p class="hint">Add custom characters, environments, or moral lessons</p>
+
+            <div class="species-tabs">
+                <button class="species-tab character active" data-type="character">Characters</button>
+                <button class="species-tab environment" data-type="environment">Environments</button>
+                <button class="species-tab moral_lesson" data-type="moral_lesson">Moral Lessons</button>
             </div>
+
+            <div id="species-list" class="species-list">
+                <p class="loading">Loading species...</p>
+            </div>
+
+            <form class="add-species-form" id="add-species-form">
+                <input type="text" id="new-species" placeholder="Add new species...">
+                <button type="submit" class="btn btn-primary btn-small">Add</button>
+            </form>
         </section>
     </div>
 
     <script>
-        // Card Management JavaScript
         const API_BASE = '/api';
 
-        // Load cards on page load
-        document.addEventListener('DOMContentLoaded', loadCards);
+        // State
+        let currentCardType = 'character';
+        let currentRole = 'main';
+        let currentSpeciesType = 'character';
+        let speciesData = { character: [], environment: [], moral_lesson: [] };
 
-        // Register form submission
-        document.getElementById('register-form').addEventListener('submit', async (e) => {
+        // DOM Elements
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCards();
+            loadAllSpecies();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Card type selector
+            document.querySelectorAll('.type-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.type-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    currentCardType = opt.dataset.type;
+                    updateFormForType(currentCardType);
+                    populateSpeciesDropdown(currentCardType);
+                });
+            });
+
+            // Role selector
+            document.querySelectorAll('.role-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
+                    opt.classList.add('selected');
+                    currentRole = opt.dataset.role;
+                });
+            });
+
+            // Species tabs
+            document.querySelectorAll('.species-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.species-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentSpeciesType = tab.dataset.type;
+                    renderSpeciesList(currentSpeciesType);
+                });
+            });
+
+            // Register form
+            document.getElementById('register-form').addEventListener('submit', saveCard);
+
+            // Add species form
+            document.getElementById('add-species-form').addEventListener('submit', addSpecies);
+        }
+
+        function updateFormForType(type) {
+            const nameGroup = document.getElementById('name-group');
+            const roleGroup = document.getElementById('role-group');
+            const speciesHint = document.getElementById('species-hint');
+
+            if (type === 'character') {
+                nameGroup.style.display = 'block';
+                roleGroup.style.display = 'block';
+                speciesHint.textContent = 'Select the type of character';
+            } else if (type === 'environment') {
+                nameGroup.style.display = 'block';
+                roleGroup.style.display = 'none';
+                speciesHint.textContent = 'Select the setting for the story';
+            } else {
+                nameGroup.style.display = 'none';
+                roleGroup.style.display = 'none';
+                speciesHint.textContent = 'Select the moral lesson to teach';
+            }
+        }
+
+        async function loadAllSpecies() {
+            try {
+                const response = await fetch(`${API_BASE}/species`);
+                speciesData = await response.json();
+                populateSpeciesDropdown('character');
+                renderSpeciesList('character');
+            } catch (error) {
+                console.error('Failed to load species:', error);
+            }
+        }
+
+        function populateSpeciesDropdown(type) {
+            const select = document.getElementById('card-species');
+            const species = speciesData[type] || [];
+
+            select.innerHTML = '<option value="">Select a species...</option>';
+            species.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+                select.appendChild(option);
+            });
+        }
+
+        function renderSpeciesList(type) {
+            const container = document.getElementById('species-list');
+            const species = speciesData[type] || [];
+
+            if (species.length === 0) {
+                container.innerHTML = '<p class="no-cards">No species defined.</p>';
+                return;
+            }
+
+            container.innerHTML = species.map(s => {
+                // Check if it's a custom species (not in defaults - we'll mark all as potentially deletable for simplicity)
+                return `<span class="species-chip">
+                    ${s.charAt(0).toUpperCase() + s.slice(1)}
+                    <span class="remove" onclick="removeSpecies('${type}', '${s}')">&times;</span>
+                </span>`;
+            }).join('');
+        }
+
+        async function addSpecies(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-species');
+            const species = input.value.trim().toLowerCase();
+
+            if (!species) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/species/${currentSpeciesType}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ species })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'added' || data.status === 'exists') {
+                    input.value = '';
+                    await loadAllSpecies();
+                } else {
+                    showMessage(data.error || 'Failed to add species', 'error');
+                }
+            } catch (error) {
+                showMessage('Error adding species: ' + error.message, 'error');
+            }
+        }
+
+        async function removeSpecies(type, species) {
+            try {
+                const response = await fetch(`${API_BASE}/species/${type}/${species}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'is_default') {
+                    showMessage('Cannot delete default species', 'error');
+                } else if (data.status === 'deleted') {
+                    await loadAllSpecies();
+                }
+            } catch (error) {
+                showMessage('Error removing species: ' + error.message, 'error');
+            }
+        }
+
+        async function saveCard(e) {
             e.preventDefault();
 
-            const uid = document.getElementById('card-uid').value.trim();
-            const animal = document.getElementById('card-animal').value.trim();
+            const species = document.getElementById('card-species').value;
+            const name = document.getElementById('card-name').value.trim();
 
-            if (!uid || !animal) {
-                showMessage('Please fill in both fields', 'error');
+            if (!species) {
+                showMessage('Please select a species', 'error');
                 return;
+            }
+
+            const cardData = {
+                card_type: currentCardType,
+                species,
+            };
+
+            if (currentCardType !== 'moral_lesson') {
+                cardData.name = name || species;
+            }
+
+            if (currentCardType === 'character') {
+                cardData.role = currentRole;
             }
 
             try {
                 const response = await fetch(`${API_BASE}/cards/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ uid, animal })
+                    body: JSON.stringify(cardData)
                 });
 
                 const data = await response.json();
 
                 if (data.status === 'saved') {
-                    showMessage(`Card registered: ${uid} → ${animal}`, 'success');
+                    showMessage(`Card registered with UID: ${data.uid}`, 'success');
                     document.getElementById('register-form').reset();
+                    // Reset the species dropdown
+                    populateSpeciesDropdown(currentCardType);
                     loadCards();
                 } else {
                     showMessage(data.error || 'Failed to save card', 'error');
@@ -107,15 +484,7 @@
             } catch (error) {
                 showMessage('Error saving card: ' + error.message, 'error');
             }
-        });
-
-        // Quick add animal buttons
-        document.querySelectorAll('.animal-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.getElementById('card-animal').value = btn.dataset.animal;
-                document.getElementById('card-uid').focus();
-            });
-        });
+        }
 
         async function loadCards() {
             const container = document.getElementById('cards-list');
@@ -130,15 +499,25 @@
                 }
 
                 let html = '<table class="cards-table"><thead><tr>';
-                html += '<th>UID</th><th>Animal</th><th>Registered</th><th>Actions</th>';
+                html += '<th>UID</th><th>Type</th><th>Species</th><th>Name</th><th>Role</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
 
                 for (const [uid, info] of Object.entries(cards)) {
-                    const date = new Date(info.registered).toLocaleDateString();
-                    html += `<tr>
+                    // Handle both legacy and new format
+                    const cardType = info.card_type || 'character';
+                    const species = info.species || info.animal || '-';
+                    const name = info.name || info.animal || '-';
+                    const role = info.role || '-';
+
+                    const typeClass = `card-type-${cardType}`;
+                    const typeBadgeClass = `type-badge ${cardType}`;
+
+                    html += `<tr class="${typeClass}">
                         <td><code>${uid}</code></td>
-                        <td>${info.animal}</td>
-                        <td>${date}</td>
+                        <td><span class="${typeBadgeClass}">${cardType.replace('_', ' ')}</span></td>
+                        <td>${species}</td>
+                        <td>${name}</td>
+                        <td>${cardType === 'character' && role !== '-' ? `<span class="role-badge">${role}</span>` : '-'}</td>
                         <td>
                             <button class="btn btn-danger btn-small" onclick="deleteCard('${uid}')">
                                 Delete
@@ -186,6 +565,10 @@
                 msg.style.display = 'none';
             }, 5000);
         }
+
+        // Make functions globally accessible
+        window.removeSpecies = removeSpecies;
+        window.deleteCard = deleteCard;
     </script>
 </body>
 </html>

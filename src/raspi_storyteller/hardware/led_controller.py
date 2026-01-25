@@ -30,6 +30,13 @@ COLORS = {
     "pink": (255, 105, 180),
 }
 
+# Card type colors
+CARD_TYPE_COLORS = {
+    "character": (0, 255, 0),      # Green for characters
+    "environment": (0, 128, 255),  # Blue for environments
+    "moral_lesson": (180, 0, 255), # Purple/Violet for moral lessons
+}
+
 
 class LEDControllerBase(ABC):
     """Abstract base class for LED controllers."""
@@ -344,6 +351,53 @@ class LEDAnimator:
                 time.sleep(0.08)
 
         self._thread = threading.Thread(target=self._run_animation, args=("playing", _playing))
+        self._thread.daemon = True
+        self._thread.start()
+
+    def animate_card_detected(self, card_type: str, duration: float = 1.0) -> None:
+        """
+        Pulse animation when a card is detected, color based on type.
+
+        Args:
+            card_type: Type of card ('character', 'environment', 'moral_lesson')
+            duration: Animation duration in seconds.
+        """
+        self.stop()
+        self._running = True
+
+        color = CARD_TYPE_COLORS.get(card_type, COLORS["green"])
+
+        def _card_pulse():
+            start = time.time()
+            while self._running and time.time() - start < duration:
+                # Fade in
+                for b in range(0, 256, 15):
+                    if not self._running:
+                        return
+                    scaled_color = (
+                        int(color[0] * b / 255),
+                        int(color[1] * b / 255),
+                        int(color[2] * b / 255),
+                    )
+                    self.controller.set_color(scaled_color)
+                    time.sleep(0.015)
+                # Fade out
+                for b in range(255, -1, -15):
+                    if not self._running:
+                        return
+                    scaled_color = (
+                        int(color[0] * b / 255),
+                        int(color[1] * b / 255),
+                        int(color[2] * b / 255),
+                    )
+                    self.controller.set_color(scaled_color)
+                    time.sleep(0.015)
+            self._running = False
+            self.controller.set_color((10, 10, 10))
+
+        self._thread = threading.Thread(
+            target=self._run_animation, args=(f"card_{card_type}", _card_pulse)
+        )
         self._thread.daemon = True
         self._thread.start()
 

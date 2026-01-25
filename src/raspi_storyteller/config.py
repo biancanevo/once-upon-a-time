@@ -80,6 +80,12 @@ class Config:
     # RFID settings
     RFID_DEBOUNCE_TIME = float(os.getenv("RFID_DEBOUNCE_TIME", "1.5"))
 
+    # Slider settings (potentiometer via MCP3008 ADC)
+    SLIDER_ADC_CHANNEL = int(os.getenv("SLIDER_ADC_CHANNEL", "0"))
+    SLIDER_SPI_BUS = int(os.getenv("SLIDER_SPI_BUS", "0"))
+    SLIDER_SPI_DEVICE = int(os.getenv("SLIDER_SPI_DEVICE", "1"))  # CE1 to avoid RFID conflict
+    DEFAULT_STORY_LENGTH = int(os.getenv("DEFAULT_STORY_LENGTH", "5"))  # minutes
+
     # Logging settings
     LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
     LOG_FILE = os.getenv("LOG_FILE", "logs/app.log")
